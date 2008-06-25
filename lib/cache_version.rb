@@ -19,7 +19,7 @@ class CacheVersion < ActiveRecord::Base
     end
   end
   
-  def self.reset
+  def self.clear_cache
     @version_by_key = {}
   end
   

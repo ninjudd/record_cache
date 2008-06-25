@@ -9,8 +9,6 @@ CACHE = MemCache.new(
   :urlencode=>false
 )
 
-CACHE.servers = ["localhost:11211"]
-
 ActiveRecord::Base.establish_connection(
   :adapter  => "mysql",
   :host     => "localhost",
@@ -49,12 +47,12 @@ class Pet < ActiveRecord::Base
   belongs_to :breed
   belongs_to :color
 
-  cache_by :id
-  cache_by :breed_id
-  cache_by :color_id, :write_ahead => true
+  record_cache :by => :id
+  record_cache :id, :by => :breed_id
+  record_cache :id, :by => :color_id, :write_ahead => true
 
-  cache_by :color_id, :scope => {:sex => 'm'}, :name => 'male_color'
-  cache_by :color_id, :scope => {:sex => ['m','f']}, :name => 'all_colors'
+  record_cache :id, :by => :color_id, :scope => {:sex => 'm'}, :name => 'male_color'
+  record_cache :id, :by => :color_id, :scope => {:sex => ['m','f']}, :name => 'all_colors'
 end
 
 class Dog < Pet
@@ -72,24 +70,35 @@ end
 class PetSet < ModelSet
 end
 
-# restart memcache
-system('killall memcached')
-system('memcached -d')
-
 module RecordCache
   class Test < Test::Unit::TestCase
     def setup
+      system('memcached -d')
+      CACHE.servers = ["localhost:11211"]
+
       CreateTables.up
       CacheVersionMigration.up
     end
     
     def teardown
+      system('killall memcached')
+      
       CreateTables.down
       CacheVersionMigration.down
       RecordCache::Index.enable_db
     end
     
-    def test_cache_by
+    def test_field_lookup
+      dog   = Breed.new(:name => 'pitbull retriever')
+      cat   = Breed.new(:name => 'house cat')
+      willy = Cat.create(:name => 'Willy', :breed => cat)
+      daisy = Dog.create(:name => 'Daisy', :breed => dog)
+
+      expected = {dog.id => daisy.id, cat.id => willy.id}
+      assert_equal expected, Pet.id_by_breed_id([dog.id, cat.id, 100, 101])      
+    end
+    
+    def test_cache
       color = Color.new(:name => 'black & white')
       dog   = Breed.new(:name => 'pitbull retriever')
       cat   = Breed.new(:name => 'house cat')
@@ -109,6 +118,8 @@ module RecordCache
       assert_equal [daisy], Dog.find_all_by_color_id(color.id)
       assert_equal [willy], Cat.find_all_by_color_id(color.id)
       assert_equal [daisy], Dog.find_all_by_breed_id(dog.id)
+
+      RecordCache::Index.enable_db
 
       assert_raises(ActiveRecord::RecordNotFound) do
         Dog.find(willy.id)
@@ -176,6 +187,25 @@ module RecordCache
         count += 1
       end
       assert_equal 5, count
+    end
+    
+    def test_save
+      b_w   = Color.new(:name => 'black & white')
+      brown = Color.new(:name => 'brown')
+      breed = Breed.new(:name => 'mutt')
+      daisy = Dog.create(:name => 'Daisy', :color => b_w, :breed => breed, :sex => 'f')
+      
+      assert_equal daisy, Dog.find_by_color_id(b_w.id)
+      
+      daisy.name  = 'Molly'
+      daisy.color = brown
+      daisy.save
+      
+      assert_equal 'Molly', daisy.name
+      assert_equal brown.id, daisy.color_id
+      
+      assert_equal daisy, Dog.find_by_color_id(brown.id)
+      assert_equal nil,   Dog.find_by_color_id(b_w.id)
     end
 
   end

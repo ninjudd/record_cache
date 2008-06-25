@@ -1,41 +1,54 @@
 require 'rubygems'
 require 'active_record'
-require 'geni_memcache'
+require 'memcache_extended'
 require 'active_record/dirty'
 require File.dirname(__FILE__) + '/cache_version'
 
 module RecordCache
   class Index
-    attr_reader :model_class, :field, :scope, :cache, :name
+    attr_reader :model_class, :index_field, :fields, :scope, :cache, :name
+    
+    NULL = 'NULL'
     
     def initialize(opts)
-      @model_class  = opts[:model_class]
-      @set_class    = opts[:set_class] || "#{opts[:model_class]}Set"
-      @field        = opts[:field].to_s
-      @scope        = opts[:scope] || {}
-      @cache        = opts[:cache]
-      @name         = opts[:name]
-      @cache_record = opts[:cache_record]
-      @use_write_db = opts[:use_write_db]
+      raise ':by => index_field required for cache' if opts[:by].nil?
+      raise 'explicit name required with scope'     if opts[:scope] and opts[:name].nil?
+
+      @auto_name    = opts[:name].nil?      
       @write_ahead  = opts[:write_ahead]
+      @cache        = opts[:cache] || CACHE
+      @model_class  = opts[:class]
+      @set_class    = opts[:set_class] || "#{@model_class}Set"
+      @index_field  = opts[:by].to_s
+      @fields       = opts[:fields].collect {|field| field.to_s}
+      @name         = (opts[:name] || "by_#{opts[:by]}").to_s
+      @scope        = opts[:scope] || {}
+      @scope[:type] = model_class.to_s if sub_class?
     end
 
-    def cache_record?; @cache_record; end
-    def use_write_db?; @use_write_db; end
+    def auto_name?;    @auto_name;    end
     def write_ahead?;  @write_ahead;  end
+
+    def full_record?
+      fields.empty?
+    end
+    
+    def includes_id?
+      full_record? or fields.include?('id')
+    end
 
     def set_class
       @set_class.constantize
     end
 
     def namespace
-      "#{model_class}_#{CacheVersion.get(model_class)}:#{name}" << (cache_record? ? '' : ':ids')
+      "#{model_class}_#{CacheVersion.get(model_class)}:#{name}" << ( full_record? ? '' : ":#{fields.join(',')}" )
     end
     
     def find_from_ids(ids, model_class)
       expects_array = ids.first.kind_of?(Array)
       ids = ids.flatten.compact
-      stringify(ids)
+      ids = stringify(ids)
 
       if ids.empty?
         return [] if expects_array
@@ -45,8 +58,16 @@ module RecordCache
       records_by_id = get_records(ids)
    
       models = ids.collect do |id|
-        record = records_by_id[id]
-        model  = record.instantiate_first(model_class) if record
+        records = records_by_id[id]
+        model   = records.instantiate_first(model_class, full_record?) if records
+
+        # try to get record from db again before we throw an exception
+        if model.nil?
+          invalidate(id)
+          records = get_records([id])[id]
+          model   = records.instantiate_first(model_class, full_record?) if records
+        end
+
         raise ActiveRecord::RecordNotFound, "Couldn't find #{model_class} with ID #{id}" unless model
         model
       end
@@ -58,35 +79,55 @@ module RecordCache
       end
     end
     
-    def find_by_field(keys, model_class, flag = nil)
+    def find_by_field(keys, model_class, type)
       keys = [keys] if not keys.kind_of?(Array)
-      stringify(keys)
+      keys = stringify(keys)
       records_by_key = get_records(keys)
       
-      case flag
+      case type
       when :first
         keys.each do |key|
-          model = records_by_key[key].instantiate_first(model_class)
+          model = records_by_key[key].instantiate_first(model_class, full_record?)
           return model if model
         end
         return nil
+      when :all
+        models = []
+        keys.each do |key|
+          models.concat( records_by_key[key].instantiate(model_class, full_record?) )
+        end
+        models
       when :set, :ids
         ids = []
         keys.each do |key|
           ids.concat( records_by_key[key].ids(model_class) )
         end
-        flag == :set ? set_class.new(ids) : ids
-      else
-        models = []
-        keys.each do |key|
-          models.concat( records_by_key[key].instantiate(model_class) )
-        end
-        models
+        type == :set ? set_class.new(ids) : ids
       end
-    end 
+    end
+    
+    def field_lookup(keys, model_class, field, flag = nil)
+      keys = [*keys]
+      keys = stringify(keys)
+      field = field.to_s if field
+      records_by_key = get_records(keys)
+
+      field_by_index = {}
+      keys.each do |key|
+        records = records_by_key[key]
+        fields = field ? records.fields(field, model_class) : records.all_fields(model_class, :except => index_field)
+        if flag == :first
+          next if fields.empty?
+          field_by_index[index_column.type_cast(key)] = fields.first
+        else
+          field_by_index[index_column.type_cast(key)] = fields
+        end
+      end
+      field_by_index
+    end
     
     def invalidate(*keys)
-      stringify(keys)
+      keys = stringify(keys)
       cache.in_namespace(namespace) do
         keys.each do |key|
           cache.delete(key)
@@ -96,7 +137,7 @@ module RecordCache
 
     def invalidate_from_conditions(conditions = nil)
       if conditions
-        sql = "SELECT #{field_name} FROM #{table_name} "
+        sql = "SELECT #{index_field} FROM #{table_name} "
         model_class.send(:add_conditions!, sql, conditions, model_class.send(:scope, :find))
         ids = connection.select_values(sql)
         invalidate(*ids)
@@ -110,14 +151,14 @@ module RecordCache
         if write_ahead?
           remove_from_cache(model)
         else
-          invalidate( field_was(model, field) )
+          invalidate( field_was(model, index_field) )
         end
       end
       if match_current_scope?(model)
         if write_ahead?
           add_to_cache(model)
         else
-          invalidate( field_is(model, field) )
+          invalidate( field_is(model, index_field) )
         end
       end
     end
@@ -165,44 +206,60 @@ module RecordCache
     end
 
     def get_records(keys)
-      cache.get_some(namespace, keys) do |keys_to_fetch|
-        raise 'db access is disabled' if @@disable_db
-        fetched_records = {}
-        keys_to_fetch.each do |key|
-          fetched_records[key] = RecordCache::Set.new(:cache_record => cache_record?)
+      cache.in_namespace(namespace) do
+        cache.get_some(keys) do |keys_to_fetch|
+          raise 'db access is disabled' if @@disable_db
+          fetched_records = {}
+          keys_to_fetch.each do |key|
+            fetched_records[key] = RecordCache::Set.new
+          end
+          sql = "SELECT #{select_fields} FROM #{table_name} WHERE (#{in_clause(keys_to_fetch)})"
+          sql << " AND #{scope_conditions}" if not scope_conditions.empty?
+          connection.select_all(sql).each do |record|
+            key = record[index_field] || NULL
+            fetched_records[key] << record
+          end
+          fetched_records
         end
-        values = keys_to_fetch.collect {|value| quote_value(value)}.join(',')
-        sql = "SELECT #{fields} FROM #{table_name} WHERE #{field_name} IN (#{values})"
-        sql << " AND #{scope_conditions}" if not scope_conditions.empty?
-        connection.select_all(sql).each do |record|
-          key = record[field]
-          fetched_records[key] << record
-        end
-        fetched_records
       end
+    end
+
+    def in_clause(keys)
+      conditions = []
+      conditions << "#{index_field} IS NULL" if keys.delete(NULL)
+
+      if keys.any?
+        values = keys.collect {|value| quote_index_value(value)}.join(',')
+        conditions << "#{index_field} IN (#{values})"
+      end
+      conditions.join(' OR ')
     end
 
     def remove_from_cache(model)
       record = model.attributes
-      key    = record[field].to_s
+      key    = field_was(model, index_field)
       
       cache.in_namespace(namespace) do
-        if records = cache.get(key)
-          records.delete(record)
-          cache.set(key, records)
+        cache.with_lock(key) do
+          if records = cache.get(key)
+            records.delete(record)
+            cache.set(key, records)
+          end
         end
       end
     end
 
     def add_to_cache(model)
       record = model.attributes
-      key    = record[field].to_s
+      key    = record[index_field].to_s
       
       cache.in_namespace(namespace) do
-        if records = cache.get(key)
-          records.delete(record)
-          records << record
-          cache.set(key, records)
+        cache.with_lock(key) do
+          if records = cache.get(key)
+            records.delete(record)
+            records << record
+            cache.set(key, records)
+          end
         end
       end
     end
@@ -233,76 +290,66 @@ module RecordCache
       end
     end
 
-    def fields
-      @fields ||= if cache_record?
-        '*'
-      else
-        @fields = "id, #{field}"
-        @fields << ", type" if base_class?
+    def select_fields
+      if @select_fields.nil?
+        if full_record?
+          @select_fields = '*'
+        else
+          @select_fields = [index_field] + fields
+          @select_fields << 'type' if base_class?
+          @select_fields = @select_fields.uniq.join(', ')
+        end
       end
+      @select_fields
     end
     
     def base_class?
-      @base_class ||= begin
-        model_class == model_class.base_class and model_class.columns_hash.has_key?('type')
-      end
-    end
-
-    def quote_value(value)
-      @column ||= model_class.columns_hash[field]
-      model_class.quote_value(value, @column)
+      @base_class ||= ( model_class == model_class.base_class and model_class.columns_hash.has_key?('type') )
     end
     
+    def sub_class?
+      @base_class ||= ( model_class != model_class.base_class )
+    end
+
+    def quote_index_value(value)
+      model_class.quote_value(value, index_column)
+    end
+    
+    def index_column
+      @index_column ||= model_class.columns_hash[index_field]
+    end
+        
     def table_name
       model_class.table_name
     end
-
-    def field_name
-      model_class.connection.quote_column_name(field)
-    end
         
     def stringify(keys)
-      keys.collect! {|id| id.to_s}.uniq!
+      keys.collect {|id| id.nil? ? NULL : id.to_s}.uniq
     end
     
     def connection
-      use_write_db? ? model_class.write_connection : model_class.connection
+      @connection ||= ActiveRecord::Base.respond_to?(:write_connection) ? ActiveRecord::Base.write_connection : ActiveRecord::Base.connection
     end
   end
  
   class Set    
     def initialize(opts = {})
       @records_by_type = {}
-      @cache_record    = opts[:cache_record]
     end
-    
-    def cache_record?
-      @cache_record
-    end
-    
+        
     def <<(record)
       type = record['type']
-      id   = record['id'].to_i
+      record['id'] = record['id'].to_i if record.has_key?('id')
       
-      if cache_record?
-        record['id'] = id
-        records_by_type(type) << record
-      else
-        records_by_type(type) << id
-      end
+      records_by_type(type) << record
     end
     
     def delete(record)
+      raise 'cannot delete record without id' unless record.has_key?('id')
       type = record['type']
       id   = record['id'].to_i
 
-      filter = if cache_record?
-        lambda {|r| r['id'] == id}
-      else
-        lambda {|r| r == id}
-      end
-      
-      records_by_type(type).reject! &filter
+      records_by_type(type).reject! {|r| r['id'] == id}
     end
 
     def records_by_type(model_class)
@@ -316,11 +363,7 @@ module RecordCache
         records_by_type(model_class)
       end
       
-      if cache_record?
-        records.sort_by {|r| r['id']}
-      else
-        records.sort
-      end
+      records.sort_by {|r| r['id']}
     end
 
     def size
@@ -336,35 +379,46 @@ module RecordCache
     end
 
     def ids(model_class)
-      if cache_record?
-        records(model_class).collect {|r| r['id']}
-      else
-        records(model_class)
+      fields('id', model_class)
+    end
+
+    def fields(field, model_class)
+      records(model_class).collect {|r| model_class.columns_hash[field].type_cast(r[field])}
+    end
+      
+    def all_fields(model_class, opts = {})
+      records(model_class).collect do |r|
+        record = {}
+        r.each do |field, value|
+          next if field == opts[:except]
+          record[field.to_sym] = model_class.columns_hash[field].type_cast(value)
+        end
+        record
       end
     end
 
-    def instantiate_first(model_class)
-      if cache_record?
+    def instantiate_first(model_class, full_record)
+      if full_record
         record = records(model_class).first
         model_class.send(:instantiate, record) if record
       else
-        id = records(model_class).first
+        id = ids(model_class).first
         model_class.find(id) if id
       end
     end
 
-    def instantiate(model_class)
-      if cache_record?
+    def instantiate(model_class, full_record)
+      if full_record
         records(model_class).collect do |record|
           model_class.send(:instantiate, record)
         end
       else
-        model_class.find(records(model_class))
+        model_class.find(ids(model_class))
       end
     end
   end
  
-  module InstanceMethods  
+  module InstanceMethods
     def invalidate_record_cache
       self.class.each_cached_index do |index|
         index.invalidate_model(self)
@@ -381,13 +435,14 @@ module RecordCache
       
       if [:all, :first].include?(args.first)
         if args.last.is_a?(Hash) and args.last.keys == [:conditions] and args.last[:conditions] =~ /^#{table_name}.(\w*) = (\d*)$/
-          index = lookup_cached_index("by_#{$1}")
+          index = cached_index("by_#{$1}")
           return index.find_by_field([$2], self, args.first) if index
         end
-        find_without_caching(*args, &block)
       else
-        lookup_cached_index('by_id').find_from_ids(args, self)
+        index = cached_index('by_id')
+        return index.find_from_ids(args, self) if index
       end
+      find_without_caching(*args, &block)
     end
     
     def update_all_with_invalidate(updates, conditions = nil)
@@ -404,84 +459,93 @@ module RecordCache
       delete_all_without_invalidate(conditions)
     end
     
-    def lookup_cached_index(name)
-      [class_name, base_class.to_s].uniq.each do |model_class|
-        if cached_indexes[model_class] and cached_indexes[model_class][name]
-          return cached_indexes[model_class][name]
-        end
+    def cached_index(name)
+      name = name.to_s
+      if cached_indexes and cached_indexes[name]
+        return cached_indexes[name]
       end
       nil
     end
     
     def each_cached_index
-      [class_name, base_class.to_s].uniq.each do |model_class|
-        if cached_indexes[model_class]
-          cached_indexes[model_class].values.each do |index|
-            yield(index)
-          end
-        end
+      cached_indexes and cached_indexes.values.each do |index|
+        yield(index)
       end
     end
   end
 
   module ActiveRecordExtension
-    def cache_by(field, opts = {})
+    def self.extended(mod)
+      mod.send(:class_inheritable_accessor, :cached_indexes)
+    end
+
+    def record_cache(*args)
       extend  RecordCache::ClassMethods
       include RecordCache::InstanceMethods
 
-      opts[:field]       = field.to_s
-      opts[:model_class] = self
-      opts[:cache] ||= CACHE
-      opts[:cache_record] ||= opts[:field] == 'id'
-      
-      raise 'explicit name required with scope' if opts[:scope] and not opts[:name]
-      opts[:name]  ||= "by_#{opts[:field]}"
-      opts[:scope] ||= {}
-      opts[:scope][:type] = self.to_s if self != base_class
+      opts = args.pop
+      opts[:fields] = args
+      opts[:class]  = self
 
       index = RecordCache::Index.new(opts)
-      index_count = add_cached_index(opts[:name], index)
+      add_cached_index(index)
+      first_index = cached_indexes.size == 1
 
       (class << self; self; end).module_eval do
-        define_method( index.find_method_name(:first) ) do |keys|
-          index.find_by_field(keys, self, :first)
-        end
-      
-        define_method( index.find_method_name(:all) ) do |keys|
-          index.find_by_field(keys, self)
-        end
-
-        define_method( index.find_method_name(:set) ) do |keys|
-          index.find_by_field(keys, self, :set)
+        if index.includes_id?
+          [:first, :all, :set, :ids].each do |type|
+            next if type == :ids and index.name == 'by_id'
+            define_method( index.find_method_name(type) ) do |keys|
+              index.find_by_field(keys, self, type)
+            end
+          end
         end
 
-        define_method( index.find_method_name(:ids) ) do |keys|
-          index.find_by_field(keys, self, :ids)
+        if not index.auto_name? and not index.full_record?
+          define_method( "#{index.name.pluralize}_by_#{index.index_field}" ) do |keys|
+            index.field_lookup(keys, self, nil)
+          end
+
+          define_method( "#{index.name.singularize}_by_#{index.index_field}" ) do |keys|
+            index.field_lookup(keys, self, nil, :first)
+          end
         end
-      
-        alias_method_chain :find, :caching if opts[:field] == 'id'
-      
-        if index_count == 1
+        
+        index.fields.each do |field|
+          next if field == index.index_field
+          plural_field = field.pluralize
+          define_method( "#{plural_field}_by_#{index.index_field}"  ) do |keys|
+            index.field_lookup(keys, self, field)
+          end
+          
+          define_method( "#{field}_by_#{index.index_field}"  ) do |keys|
+            index.field_lookup(keys, self, field, :first)
+          end
+        end
+              
+        if first_index
+          alias_method_chain :find, :caching
           alias_method_chain :update_all, :invalidate
           alias_method_chain :delete_all, :invalidate
         end
       end
-
-      if index_count == 1
+      
+      if first_index
         after_save    :invalidate_record_cache
         after_destroy :invalidate_record_cache
       end
     end
-    
-    @@cached_indexes = {}
-    def cached_indexes
-      @@cached_indexes
-    end
 
-    def add_cached_index(name, index)
-      cached_indexes[class_name] ||= {}
-      cached_indexes[class_name][name] = index
-      cached_indexes[class_name].size
+    def add_cached_index(index)      
+      self.cached_indexes ||= {}
+      name  = index.name
+      count = nil
+      # Make sure the key is unique.
+      while cached_indexes["#{name}#{count}"]
+        count ||= 0
+        count += 1
+      end
+      cached_indexes["#{name}#{count}"] = index
     end
   
   end
