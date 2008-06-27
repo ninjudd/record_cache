@@ -45,9 +45,9 @@ module RecordCache
       "#{model_class}_#{CacheVersion.get(model_class)}:#{name}" << ( full_record? ? '' : ":#{fields.join(',')}" )
     end
     
-    def find_from_ids(ids, model_class)
+    def find_by_ids(ids, model_class)
       expects_array = ids.first.kind_of?(Array)
-      ids = ids.flatten.compact
+      ids = ids.flatten.compact.collect {|id| id.to_i}
       ids = stringify(ids)
 
       if ids.empty?
@@ -195,14 +195,14 @@ module RecordCache
     
     def field_was(model, field)
       if [:id, :type, 'id', 'type'].include?(field)
-        model.attributes[field]
+        model.send(field.to_s)
       else
         model.send("#{field}_was")
       end
     end
     
     def field_is(model, field)
-      model.attributes[field.to_s]
+      model.send(field.to_s)
     end
 
     def get_records(keys)
@@ -324,7 +324,7 @@ module RecordCache
     end
         
     def stringify(keys)
-      keys.collect {|id| id.nil? ? NULL : id.to_s}.uniq
+      keys.collect {|key| key.nil? ? NULL : key.to_s}.uniq
     end
     
     def connection
@@ -440,7 +440,7 @@ module RecordCache
         end
       else
         index = cached_index('by_id')
-        return index.find_from_ids(args, self) if index
+        return index.find_by_ids(args, self) if index
       end
       find_without_caching(*args, &block)
     end
