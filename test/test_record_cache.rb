@@ -10,9 +10,9 @@ CACHE = MemCache.new(
 )
 
 ActiveRecord::Base.establish_connection(
-  :adapter  => "mysql",
+  :adapter  => "postgresql",
   :host     => "localhost",
-  :username => "root",
+  :username => "postgres",
   :password => "",
   :database => "record_cache_test"
 )
@@ -163,6 +163,17 @@ module RecordCache
       RecordCache::Index.enable_db
 
       assert_equal [daisy, baseball], Dog.find_all_by_breed_id(breed1.id)
+    end
+
+    def test_find_raw
+      daisy = Dog.create(:name => 'Daisy')
+      sammy = Dog.create(:name => 'Sammy')
+      
+      Dog.find(daisy.id, sammy.id)
+      RecordCache::Index.disable_db
+
+      raw_records = Dog.find_raw_by_id([sammy.id, daisy.id])
+      assert_equal ['Sammy', 'Daisy'], raw_records.collect {|r| r['name']}
     end
 
     def test_scope

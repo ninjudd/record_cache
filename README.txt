@@ -1,28 +1,25 @@
-= record_cache
+= RecordCache
 
-http://github.com/ninjudd/record_cache
-
-== DESCRIPTION:
-
-Cache indexes and ActiveRecord models using MemCache.
+RecordCache is a simple yet powerful extension to ActiveRecord that lets you cache indexes
+and ActiveRecord models using MemCache.
 
 == INSTALL:
 
-  $ sudo gem install record_cache
+  sudo gem install record_cache
 
 Also, you need to create a migration to make the cache_versions table. See examples/sample_migration.rb
 
 == USAGE:
 
-  class Blah < ActiveRecord
+  class Foo < ActiveRecord
     record_cache :by => :id
     record_cache :id, :by => :owner_id
   end
 
   # These will use the cache now.
-  Blah.find(1)
-  Blah.find_by_id(2)
-  Blah.find_all_by_owner_id(3)
+  Foo.find(1)
+  Foo.find_by_id(2)
+  Foo.find_all_by_owner_id(3)
 
 Invalidation is handled for you using after_save and after_destroy filters.
 
@@ -30,7 +27,7 @@ Invalidation is handled for you using after_save and after_destroy filters.
 
 (The MIT License)
 
-Copyright (c) 2008 Justin Balthrop, Geni.com
+Copyright (c) 2008 FIX
 
 Permission is hereby granted, free of charge, to any person obtaining
 a copy of this software and associated documentation files (the

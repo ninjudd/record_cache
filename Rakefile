@@ -1,4 +1,12 @@
-require 'config/requirements'
-require 'config/hoe' # setup Hoe + all gem configuration
+# -*- ruby -*-
 
-Dir['tasks/**/*.rake'].each { |rake| load rake }
+require 'rubygems'
+require 'hoe'
+require './lib/record_cache.rb'
+
+Hoe.new('RecordCache', RecordCache::VERSION) do |p|
+  # p.rubyforge_name = 'RecordCachex' # if different than lowercase project name
+  p.developer('Justin Balthrop', 'ruby@justinbalthrop.com')
+end
+
+# vim: syntax=Ruby

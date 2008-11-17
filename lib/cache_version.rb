@@ -1,5 +1,4 @@
-class CacheVersion < ActiveRecord::Base
-  
+class CacheVersion < ActiveRecord::Base  
   after_save    :invalidate_cache
   after_destroy :invalidate_cache
   
@@ -28,6 +27,7 @@ class CacheVersion < ActiveRecord::Base
     cv.version += 1
     cv.save
     cv.version
+  rescue MemCache::MemCacheError
   end
     
   def self.cache_key(key)
