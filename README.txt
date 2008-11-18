@@ -1,7 +1,8 @@
 = RecordCache
 
 RecordCache is a simple yet powerful extension to ActiveRecord that caches indexes
-and ActiveRecord models using MemCache.
+and ActiveRecord models using MemCache. If you use it correctly, it will drastically
+reduce your database load.
 
 == INSTALL:
 
