@@ -1,6 +1,6 @@
 = RecordCache
 
-RecordCache is a simple yet powerful extension to ActiveRecord that lets you cache indexes
+RecordCache is a simple yet powerful extension to ActiveRecord that caches indexes
 and ActiveRecord models using MemCache.
 
 == INSTALL:
