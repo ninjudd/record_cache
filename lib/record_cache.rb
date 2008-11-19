@@ -58,7 +58,7 @@ module RecordCache
     end
 
     def namespace
-      "#{model_class}_#{CacheVersion.get(model_class)}:#{name}" << ( full_record? ? '' : ":#{fields.join(',')}" )
+      "#{model_class}_#{CacheVersion.get(RecordCache)}_#{CacheVersion.get(model_class)}:#{name}" << ( full_record? ? '' : ":#{fields.join(',')}" )
     end
     
     def find_by_ids(ids, model_class)
