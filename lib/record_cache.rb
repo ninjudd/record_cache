@@ -252,6 +252,11 @@ module RecordCache
       end
     end
 
+    def model_to_record(model)
+      sql = "SELECT #{select_fields} FROM #{table_name} WHERE id = #{model.id}"
+      db.select_all(sql).first
+    end
+
     def in_clause(keys)
       conditions = []
       conditions << "#{index_field} IS NULL" if keys.delete(NULL)
@@ -278,9 +283,9 @@ module RecordCache
     end
 
     def add_to_cache(model)
-      record = model.instance_variable_get(:@attributes)
+      record = model_to_record(model)
       key    = record[index_field].to_s
-      
+
       cache.in_namespace(namespace) do
         cache.with_lock(key) do
           if records = cache.get(key)
@@ -358,11 +363,11 @@ module RecordCache
     def sort!(order_by)
       field, order = order_by.strip.squeeze.split
       descending = (order == 'DESC')
-      records_by_type.values.each do |records|
+      @records_by_type.values.each do |records|
         sorted_records = records.sort_by do |record|
-          value = type_cast(field, record[field])
-          value = -value if descending
+          type_cast(field, record[field])
         end
+        sorted_records.reverse! if descending
         records.replace(sorted_records)
       end
     end
