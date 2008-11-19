@@ -353,10 +353,11 @@ module RecordCache
   end
  
   class Set    
-    attr_reader :base_class
+    attr_reader :model_class
 
-    def initialize(base_class)
-      @base_class = base_class
+    def initialize(model_class)
+      raise 'valid model class required' unless model_class
+      @model_class = model_class
       @records_by_type = {}
     end
 
@@ -387,7 +388,7 @@ module RecordCache
       record_type  = record['type']
       record['id'] = record['id'].to_i if record.has_key?('id')
       
-      [record_type, base_class.to_s].uniq.each do |type|
+      [record_type, model_class.to_s].uniq.each do |type|
         records_by_type(type) << record
       end
     end
@@ -397,7 +398,7 @@ module RecordCache
       record_type = record['type']
       id          = record['id'].to_i
 
-      [record_type, base_class.to_s].uniq.each do |type|
+      [record_type, model_class.to_s].uniq.each do |type|
         records_by_type(type).reject! {|r| r['id'] == id}
       end
     end
@@ -406,7 +407,7 @@ module RecordCache
       @records_by_type[type.to_s] ||= []
     end
 
-    def records(type = base_class)
+    def records(type = model_class)
       records_by_type(type)
     end
 
@@ -418,15 +419,15 @@ module RecordCache
       records.empty?
     end
 
-    def ids(type = base_class)
-      fields('id', type)
+    def ids(type = model_class)
+      records(type).collect {|r| r['id']}
     end
 
     def fields(field, type)
       records(type).collect {|r| type_cast(field, r[field])}
     end
       
-    def all_fields(type = base_class, opts = {})
+    def all_fields(type = model_class, opts = {})
       records(type).collect do |r|
         record = {}
         r.each do |field, value|
@@ -437,7 +438,7 @@ module RecordCache
       end
     end
 
-    def instantiate_first(type = base_class, full_record = false)
+    def instantiate_first(type = model_class, full_record = false)
       if full_record
         record = records(type).first
         type.send(:instantiate, record) if record
@@ -447,7 +448,7 @@ module RecordCache
       end
     end
 
-    def instantiate(type = base_class, full_record = false)
+    def instantiate(type = model_class, full_record = false)
       if full_record
         records(type).collect do |record|
           type.send(:instantiate, record)
@@ -460,7 +461,7 @@ module RecordCache
   private
     
     def type_cast(field, value)
-      base_class.columns_hash[field].type_cast(value)
+      model_class.columns_hash[field].type_cast(value)
     end
 
   end
