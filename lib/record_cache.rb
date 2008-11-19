@@ -22,8 +22,6 @@ module RecordCache
     def initialize(opts)
       raise ':by => index_field required for cache'    if opts[:by].nil?
       raise 'explicit name required with scope'        if opts[:scope] and opts[:name].nil?
-      raise 'write_ahead not compatible with limit'    if opts[:write_ahead] and opts[:limit]
-      raise 'write_ahead not compatible with order_by' if opts[:write_ahead] and opts[:order_by]
 
       @auto_name     = opts[:name].nil?      
       @write_ahead   = opts[:write_ahead]
@@ -101,7 +99,7 @@ module RecordCache
       keys = [keys] if not keys.kind_of?(Array)
       keys = stringify(keys)
       records_by_key = get_records(keys)
-      
+
       case type
       when :first
         keys.each do |key|
@@ -238,7 +236,7 @@ module RecordCache
           raise 'db access is disabled' if @@disable_db
           fetched_records = {}
           keys_to_fetch.each do |key|
-            fetched_records[key] = RecordCache::Set.new(:order_by => order_by, :limit => limit)
+            fetched_records[key] = RecordCache::Set.new(model_class)
           end
           sql = "SELECT #{select_fields} FROM #{table_name} WHERE (#{in_clause(keys_to_fetch)})"
           sql << " AND #{scope.conditions}" if not scope.empty?
@@ -288,6 +286,8 @@ module RecordCache
           if records = cache.get(key)
             records.delete(record)
             records << record
+            records.sort!(order_by) if order_by
+            records.limit!(limit)   if limit
             cache.set(key, records)
           end
         end
@@ -348,47 +348,61 @@ module RecordCache
   end
  
   class Set    
-    def initialize(opts = {})
-      @opts = opts
+    attr_reader :base_class
+
+    def initialize(base_class)
+      @base_class = base_class
       @records_by_type = {}
     end
 
-    def limit
-      @opts[:limit]
+    def sort!(order_by)
+      field, order = order_by.strip.squeeze.split
+      descending = (order == 'DESC')
+      records_by_type.values.each do |records|
+        sorted_records = records.sort_by do |record|
+          value = type_cast(field, record[field])
+          value = -value if descending
+        end
+        records.replace(sorted_records)
+      end
     end
-
-    def order_by
-      @opts[:order_by]
+    
+    def limit!(limit)
+      all_records = records
+      if all_records.length > limit
+        removed_records = all_records.slice!(limit..-1)
+        removed_records.each do |record|
+          type = record['type']
+          records_by_type(type).delete(record) if type
+        end
+      end
     end
 
     def <<(record)
-      type = record['type']
+      record_type  = record['type']
       record['id'] = record['id'].to_i if record.has_key?('id')
       
-      records_by_type(type) << record if type
-      records_by_type(nil)  << record
+      [record_type, base_class.to_s].uniq.each do |type|
+        records_by_type(type) << record
+      end
     end
     
     def delete(record)
       raise 'cannot delete record without id' unless record.has_key?('id')
-      type = record['type']
-      id   = record['id'].to_i
+      record_type = record['type']
+      id          = record['id'].to_i
 
-      records_by_type(type).reject! {|r| r['id'] == id} if type
-      records_by_type(nil).reject!  {|r| r['id'] == id}
-    end
-
-    def records_by_type(model_class)
-      model_class = model_class.to_s if model_class
-      @records_by_type[model_class] ||= []
-    end
-
-    def records(model_class = nil)
-      if model_class == model_class.base_class
-        records_by_type(nil)
-      else
-        records_by_type(model_class)
+      [record_type, base_class.to_s].uniq.each do |type|
+        records_by_type(type).reject! {|r| r['id'] == id}
       end
+    end
+
+    def records_by_type(type)
+      @records_by_type[type.to_s] ||= []
+    end
+
+    def records(type = base_class)
+      records_by_type(type)
     end
 
     def size
@@ -399,44 +413,51 @@ module RecordCache
       records.empty?
     end
 
-    def ids(model_class)
-      fields('id', model_class)
+    def ids(type = base_class)
+      fields('id', type)
     end
 
-    def fields(field, model_class)
-      records(model_class).collect {|r| model_class.columns_hash[field].type_cast(r[field])}
+    def fields(field, type)
+      records(type).collect {|r| type_cast(field, r[field])}
     end
       
-    def all_fields(model_class, opts = {})
-      records(model_class).collect do |r|
+    def all_fields(type = base_class, opts = {})
+      records(type).collect do |r|
         record = {}
         r.each do |field, value|
           next if field == opts[:except]
-          record[field.to_sym] = model_class.columns_hash[field].type_cast(value)
+          record[field.to_sym] = type_cast(field, value)
         end
         record
       end
     end
 
-    def instantiate_first(model_class, full_record)
+    def instantiate_first(type = base_class, full_record = false)
       if full_record
-        record = records(model_class).first
-        model_class.send(:instantiate, record) if record
+        record = records(type).first
+        type.send(:instantiate, record) if record
       else
-        id = ids(model_class).first
-        model_class.find(id) if id
+        id = ids(type).first
+        type.find(id) if id
       end
     end
 
-    def instantiate(model_class, full_record)
+    def instantiate(type = base_class, full_record = false)
       if full_record
-        records(model_class).collect do |record|
-          model_class.send(:instantiate, record)
+        records(type).collect do |record|
+          type.send(:instantiate, record)
         end
       else
-        model_class.find(ids(model_class))
+        type.find(ids(type))
       end
     end
+
+  private
+    
+    def type_cast(field, value)
+      base_class.columns_hash[field].type_cast(value)
+    end
+
   end
  
   class Scope
