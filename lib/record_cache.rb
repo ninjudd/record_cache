@@ -546,7 +546,7 @@ module RecordCache
             return index.find_by_field([value], self, args.first) if index
           end
         end
-      else
+      elsif not args.last.is_a?(Hash)
         # This is a find with just ids.
         index = cached_index('by_id')
         return index.find_by_ids(args, self) if index
