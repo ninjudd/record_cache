@@ -61,6 +61,17 @@ module RecordCache
       "#{model_class}_#{CacheVersion.get(RecordCache)}_#{CacheVersion.get(model_class)}:#{name}" << ( full_record? ? '' : ":#{fields.join(',')}" )
     end
     
+    def fields_hash
+      if @fields_hash.nil?
+        if full_record?
+          @fields_hash ||= model_class.column_names.hash
+        else
+          @fields_hash ||= fields.collect {|field| field.to_s}.hash
+        end
+      end
+      @fields_hash
+    end
+
     def find_by_ids(ids, model_class)
       expects_array = ids.first.kind_of?(Array)
       ids = ids.flatten.compact.collect {|id| id.to_i}
@@ -231,12 +242,13 @@ module RecordCache
         opts = { 
           :expiry        => expiry,
           :disable_write => model_class.record_cache_config[:disable_write],
+          :validation    => lambda {|key, record_set| record_set.fields_hash == fields_hash},
         }
         cache.get_some(keys, opts) do |keys_to_fetch|
           raise 'db access is disabled' if @@disable_db
           fetched_records = {}
           keys_to_fetch.each do |key|
-            fetched_records[key] = RecordCache::Set.new(model_class)
+            fetched_records[key] = RecordCache::Set.new(model_class, fields_hash)
           end
           sql = "SELECT #{select_fields} FROM #{table_name} WHERE (#{in_clause(keys_to_fetch)})"
           sql << " AND #{scope.conditions}" if not scope.empty?
@@ -353,11 +365,12 @@ module RecordCache
   end
  
   class Set    
-    attr_reader :model_class
+    attr_reader :model_class, :fields_hash
 
-    def initialize(model_class)
+    def initialize(model_class, fields_hash = nil)
       raise 'valid model class required' unless model_class
       @model_class = model_class
+      @fields_hash = fields_hash
       @records_by_type = {}
     end
 
