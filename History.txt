@@ -1,6 +1,8 @@
-=== 1.0.0 / 2008-11-17
+== 0.9.0 2008-11-17
 
-* 1 major enhancement
+* Added support for order_by and limit
+* Added raw methods to get uninstantiated records
 
-  * Birthday!
+== 0.1.0 2008-05-31
 
+* Initial release
