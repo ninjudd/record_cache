@@ -4,13 +4,7 @@ RecordCache is a simple yet powerful extension to ActiveRecord that caches index
 and ActiveRecord models using MemCache. If you use it correctly, it will drastically
 reduce your database load.
 
-== INSTALL:
-
-  sudo gem install record_cache
-
-Also, you need to create a migration to make the cache_versions table. See examples/sample_migration.rb
-
-== USAGE:
+== Usage:
 
   class Foo < ActiveRecord
     record_cache :by => :id
@@ -24,6 +18,12 @@ Also, you need to create a migration to make the cache_versions table. See examp
 
 Invalidation is handled for you using after_save and after_destroy filters.
 
-== LICENSE:
+== Install:
+
+  sudo gem install record_cache
+
+Also, you need to create a migration to make the cache_versions table. See examples/sample_migration.rb
+
+== License:
 
 Copyright (c) 2008 Jusin Balthrop, Geni.com; Published under The MIT License, see License.txt
