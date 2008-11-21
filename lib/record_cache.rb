@@ -474,9 +474,10 @@ module RecordCache
   private
     
     def type_cast(field, value)
-      model_class.columns_hash[field].type_cast(value)
+      column = model_class.columns_hash[field.to_s]
+      raise 'column not found in #{model_class} for field #{field}' unless column
+      column.type_cast(value)
     end
-
   end
  
   class Scope
