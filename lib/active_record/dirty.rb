@@ -136,7 +136,7 @@ module ActiveRecord
       end
 
       def update_with_dirty
-        if partial_updates?
+        if respond_to?(:partial_updates?) and partial_updates?
           update_without_dirty(changed)
         else
           update_without_dirty
