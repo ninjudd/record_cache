@@ -188,13 +188,13 @@ module RecordCache
     
     def invalidate_model(model)
       attribute     = model.send(index_field)
-      attribute_was = model.send(:attribute_was, index_field.to_s)
+      attribute_was = model.attr_was(index_field)
 
       if scope.match_previous?(model)
         if write_ahead?
           remove_from_cache(model)
         else
-          invalidate( attribute_was )
+          invalidate(attribute_was)
         end
       end
 
@@ -202,7 +202,7 @@ module RecordCache
         if write_ahead?
           add_to_cache(model)
         elsif not (scope.match_previous?(model) and attribute_was == attribute)
-          invalidate( attribute ) 
+          invalidate(attribute) 
         end
       end
     end
@@ -282,7 +282,7 @@ module RecordCache
 
     def remove_from_cache(model)
       record = model.attributes
-      key    = model.send(:attribute_was, index_field.to_s)
+      key    = model.attr_was(index_field)
       
       cache.in_namespace(namespace) do
         cache.with_lock(key) do
@@ -504,7 +504,7 @@ module RecordCache
 
     def match_previous?(model)
       fields.all? do |field|
-        match?( field, model.send(:attribute_was, field.to_s) )
+        match?( field, model.attr_was(field) )
       end
     end
 
@@ -540,6 +540,11 @@ module RecordCache
       self.class.each_cached_index do |index|
         index.invalidate_model(self)
       end
+    end
+
+    def attr_was(attr)
+      attr = attr.to_s
+      ['id', 'type'].include?(attr) ? send(attr) : send(:attribute_was, attr)
     end
   end
     
