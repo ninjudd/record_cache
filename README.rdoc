@@ -20,9 +20,10 @@ Invalidation is handled for you using after_save and after_destroy filters.
 
 == Install:
 
+  sudo gem install cache_version
   sudo gem install record_cache
 
-Also, you need to create a migration to make the cache_versions table. See examples/sample_migration.rb
+Requires the extended version of the memcache client (http://github.com/ninjudd/memcache).
 
 == License:
 

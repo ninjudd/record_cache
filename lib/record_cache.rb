@@ -1,10 +1,10 @@
 require 'rubygems'
 require 'active_record'
 require 'memcache_extended'
-require File.dirname(__FILE__) + '/cache_version'
+require 'cache_versions'
 
 module RecordCache
-  VERSION = "0.9.0"
+  VERSION = '0.9.1'
 
   def self.config(opts = nil)
     if opts
