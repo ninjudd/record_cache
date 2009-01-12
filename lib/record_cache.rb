@@ -1,7 +1,7 @@
 require 'rubygems'
 require 'active_record'
 require 'memcache_extended'
-require 'cache_versions'
+require 'cache_version'
 
 module RecordCache
   VERSION = '0.9.1'
