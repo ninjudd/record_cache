@@ -2,7 +2,6 @@ require 'test/unit'
 require 'rubygems'
 require 'mocha'
 require 'model_set'
-require 'pp'
 require File.dirname(__FILE__) + '/../lib/record_cache'
 
 class << Test::Unit::TestCase

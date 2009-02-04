@@ -67,9 +67,6 @@ end
 class Color < ActiveRecord::Base
 end
 
-class PetSet < ModelSet
-end
-
 module RecordCache
   class Test < Test::Unit::TestCase
     def setup
@@ -151,7 +148,7 @@ module RecordCache
       assert_equal [daisy],        Dog.find_all_by_breed_id(breed1.id)
 
       # Alternate find methods.
-      assert_equal [sammy.id, daisy.id], Dog.find_set_by_breed_id([breed2.id, breed1.id]).ids
+      #assert_equal [sammy.id, daisy.id], Dog.find_set_by_breed_id([breed2.id, breed1.id]).ids
       assert_equal [sammy.id, daisy.id], Dog.find_ids_by_breed_id([breed2.id, breed1.id])
 
       assert_equal daisy, Dog.find_by_color_id(color1.id)

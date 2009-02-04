@@ -1,5 +1,6 @@
 require 'rubygems'
 require 'active_record'
+require 'ordered_set'
 require 'memcache_extended'
 require 'cache_version'
 
@@ -510,24 +511,32 @@ module RecordCache
 
     def match?(field, value)
       scope = query[field]
-      if scope == :not_null
-        not value.nil?
-      else
-        [*scope].include?(value)
+      if defined?(AntiObject) and scope.kind_of?(AntiObject)
+        scope  = ~scope
+        invert = true
       end
+
+      match = [*scope].include?(value)
+      invert ? !match : match
     end
 
     def conditions
       @conditions ||= begin
         query.collect do |field, scope|
+          if defined?(AntiObject) and scope.kind_of?(AntiObject)
+            scope  = ~scope
+            invert = true
+          end
+
           if scope.nil?
-            "#{field} IS NULL"
-          elsif scope == :not_null
-            "#{field} IS NOT NULL"
+            op = invert ? 'IS NOT' : 'IS'
+            "#{field} #{op} NULL"
           elsif scope.is_a?(Array)
-            model_class.send(:sanitize_sql, ["#{field} IN (?)", scope])
+            op = invert ? 'NOT IN' : 'IN'
+            model_class.send(:sanitize_sql, ["#{field} #{op} (?)", scope])
           else
-            model_class.send(:sanitize_sql, ["#{field} = ?", scope])
+            op = invert ? '!=' : '='
+            model_class.send(:sanitize_sql, ["#{field} #{op} ?", scope])
           end
         end.join(' AND ')
       end
