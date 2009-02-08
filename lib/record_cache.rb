@@ -237,7 +237,8 @@ module RecordCache
     end
         
   private
-    
+
+    MAX_FETCH = 1000
     def get_records(keys)
       cache.in_namespace(namespace) do
         opts = { 
@@ -251,14 +252,17 @@ module RecordCache
           keys_to_fetch.each do |key|
             fetched_records[key] = RecordCache::Set.new(model_class, fields_hash)
           end
-          sql = "SELECT #{select_fields} FROM #{table_name} WHERE (#{in_clause(keys_to_fetch)})"
-          sql << " AND #{scope.conditions}" if not scope.empty?
-          sql << " ORDER BY #{order_by}"    if order_by
-          sql << " LIMIT #{limit}"          if limit
 
-          db.select_all(sql).each do |record|
-            key = record[index_field] || NULL
-            fetched_records[key] << record
+          keys_to_fetch.each_slice(MAX_FETCH) do |keys_batch|
+            sql = "SELECT #{select_fields} FROM #{table_name} WHERE (#{in_clause(keys_batch)})"
+            sql << " AND #{scope.conditions}" if not scope.empty?
+            sql << " ORDER BY #{order_by}"    if order_by
+            sql << " LIMIT #{limit}"          if limit
+
+            db.select_all(sql).each do |record|
+              key = record[index_field] || NULL
+              fetched_records[key] << record
+            end
           end
           fetched_records
         end
