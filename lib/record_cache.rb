@@ -59,7 +59,7 @@ module RecordCache
     end
 
     def namespace
-      "#{model_class.version_key}_#{RecordCache.version}:#{name}" << ( full_record? ? '' : ":#{fields.join(',')}" )
+      "#{model_class.name}_#{model_class.version}_#{RecordCache.version}:#{name}" << ( full_record? ? '' : ":#{fields.join(',')}" )
     end
     
     def fields_hash
