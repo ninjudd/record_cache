@@ -462,7 +462,7 @@ module RecordCache
         type.send(:instantiate, record) if record
       else
         id = ids(type).first
-        type.find(id) if id
+        type.find_by_id(id) if id
       end
     end
 
@@ -472,7 +472,7 @@ module RecordCache
           type.send(:instantiate, record)
         end
       else
-        type.find(ids(type))
+        type.find_all_by_id(ids(type))
       end
     end
 
