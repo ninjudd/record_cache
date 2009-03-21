@@ -51,7 +51,8 @@ class Pet < ActiveRecord::Base
   record_cache :id, :by => :breed_id
   record_cache :id, :by => :color_id, :write_ahead => true
 
-  record_cache :id, :by => :color_id, :scope => {:sex => 'm'}, :name => 'male_color'
+  record_cache :id, :by => :color_id, :scope => {:sex => 'm'}, :prefix => 'male'
+  record_cache :id, :by => :color_id, :scope => {:sex => 'f'}, :prefix => 'female'
   record_cache :id, :by => :color_id, :scope => {:sex => ['m','f']}, :name => 'all_colors'
 end
 
@@ -141,15 +142,15 @@ module RecordCache
 
       RecordCache::Index.disable_db
 
-      assert_equal [daisy, sammy], Dog.find(daisy.id, sammy.id)
-      assert_equal [daisy, sammy], Dog.find_all_by_color_id(color1.id)
-      assert_equal [daisy, sammy], Dog.find_all_by_breed_id([breed1.id, breed2.id])
-      assert_equal [sammy, daisy], Dog.find_all_by_breed_id([breed2.id, breed1.id])
-      assert_equal [daisy],        Dog.find_all_by_breed_id(breed1.id)
+      assert_equal [daisy, sammy].to_set, Dog.find(daisy.id, sammy.id).to_set
+      assert_equal [daisy, sammy].to_set, Dog.find_all_by_color_id(color1.id).to_set
+      assert_equal [daisy, sammy].to_set, Dog.find_all_by_breed_id([breed1.id, breed2.id]).to_set
+      assert_equal [sammy, daisy].to_set, Dog.find_all_by_breed_id([breed2.id, breed1.id]).to_set
+      assert_equal [daisy].to_set,        Dog.find_all_by_breed_id(breed1.id).to_set
 
       # Alternate find methods.
       #assert_equal [sammy.id, daisy.id], Dog.find_set_by_breed_id([breed2.id, breed1.id]).ids
-      assert_equal [sammy.id, daisy.id], Dog.find_ids_by_breed_id([breed2.id, breed1.id])
+      assert_equal [sammy.id, daisy.id].to_set, Dog.find_ids_by_breed_id([breed2.id, breed1.id]).to_set
 
       assert_equal daisy, Dog.find_by_color_id(color1.id)
       assert_equal daisy, Dog.find_by_breed_id([breed1.id, breed2.id])
@@ -180,12 +181,13 @@ module RecordCache
       daisy = Dog.create(:name => 'Daisy', :color => color, :breed => breed1, :sex => 'f')
       sammy = Dog.create(:name => 'Sammy', :color => color, :breed => breed2, :sex => 'm')
       
-      assert_equal [sammy],        Dog.find_male_color(color.id)
+      assert_equal [sammy],        Dog.find_all_male_by_color_id(color.id)
+      assert_equal [daisy],        Dog.find_all_female_by_color_id(color.id)
       assert_equal [daisy, sammy], Dog.find_all_colors(color.id)
 
       cousin = Dog.create(:name => 'Cousin', :color => color, :breed => breed2, :sex => 'm')
 
-      assert_equal [sammy, cousin],        Dog.find_male_color(color.id)
+      assert_equal [sammy, cousin],        Dog.find_all_male_by_color_id(color.id)
       assert_equal [daisy, sammy, cousin], Dog.find_all_colors(color.id)
     end
 
@@ -194,7 +196,7 @@ module RecordCache
       Dog.each_cached_index do |index|
         count += 1
       end
-      assert_equal 5, count
+      assert_equal 6, count
     end
     
     def test_save

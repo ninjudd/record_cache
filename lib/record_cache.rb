@@ -5,7 +5,7 @@ require 'memcache_extended'
 require 'cache_version'
 
 module RecordCache
-  VERSION = '0.9.1'
+  VERSION = '0.9.2'
 
   def self.config(opts = nil)
     if opts
@@ -16,13 +16,13 @@ module RecordCache
   end
 
   class Index
-    attr_reader :model_class, :index_field, :fields, :scope, :order_by, :limit, :cache, :expiry, :name
+    attr_reader :model_class, :index_field, :fields, :scope, :order_by, :limit, :cache, :expiry, :name, :prefix
     
     NULL = 'NULL'
     
     def initialize(opts)
       raise ':by => index_field required for cache'    if opts[:by].nil?
-      raise 'explicit name required with scope'        if opts[:scope] and opts[:name].nil?
+      raise 'explicit name or prefix required with scope' if opts[:scope] and opts[:name].nil? and opts[:prefix].nil?
 
       @auto_name     = opts[:name].nil?      
       @write_ahead   = opts[:write_ahead]
@@ -32,7 +32,8 @@ module RecordCache
       @set_class     = opts[:set_class] || "#{@model_class}Set"
       @index_field   = opts[:by].to_s
       @fields        = opts[:fields].collect {|field| field.to_s}
-      @name          = (opts[:name] || "by_#{opts[:by]}").to_s
+      @prefix        = opts[:prefix]
+      @name          = ( opts[:name] || [prefix, 'by', index_field].compact.join('_') ).to_s
       @order_by      = opts[:order_by]
       @limit         = opts[:limit]
       @disallow_null = opts[:null] == false
@@ -218,13 +219,15 @@ module RecordCache
     end
        
     def find_method_name(type)
-      if name =~ /^by_/
+      if name =~ /(^|_)by_/
+puts 'classic ' + name
         if type == :first
           "find_#{name}"
         else
           "find_#{type}_#{name}"
         end
       else
+puts 'strange ' + name
         case type
         when :all
           "find_#{name}"
@@ -709,16 +712,18 @@ module RecordCache
           (field_lookup + index.fields).each do |field|
             next if field == index.index_field
             plural_field = field.pluralize
+            prefix = index.prefix
+            prefix = "#{prefix}_" if prefix
 
-            define_method( "all_#{plural_field}_by_#{index.index_field}"  ) do |keys|
+            define_method( "all_#{prefix}#{plural_field}_by_#{index.index_field}"  ) do |keys|
               index.field_lookup(keys, self, field, :all)
             end
 
-            define_method( "#{plural_field}_by_#{index.index_field}"  ) do |keys|
+            define_method( "#{prefix}#{plural_field}_by_#{index.index_field}"  ) do |keys|
               index.field_lookup(keys, self, field)
             end
             
-            define_method( "#{field}_by_#{index.index_field}"  ) do |keys|
+            define_method( "#{prefix}#{field}_by_#{index.index_field}"  ) do |keys|
               index.field_lookup(keys, self, field, :first)
             end
           end
