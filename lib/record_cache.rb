@@ -220,14 +220,12 @@ module RecordCache
        
     def find_method_name(type)
       if name =~ /(^|_)by_/
-puts 'classic ' + name
         if type == :first
           "find_#{name}"
         else
           "find_#{type}_#{name}"
         end
       else
-puts 'strange ' + name
         case type
         when :all
           "find_#{name}"
