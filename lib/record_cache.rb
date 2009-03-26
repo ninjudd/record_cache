@@ -68,10 +68,22 @@ module RecordCache
         opts = args.last
         if opts.is_a?(Hash) and opts.keys == [:conditions]
           # Try to match the SQL.
-          if opts[:conditions] =~ /^"?#{table_name}"?.(\w*) = (\d*)$/
+          if opts[:conditions].kind_of?(Hash)
+            field = nil
+            value = nil
+            if opts[:conditions].keys.size == 1
+              opts[:conditions].each {|f,v| field, value = f,v}
+            end
+          elsif opts[:conditions] =~ /^(?:"?#{table_name}"?.)?"?(\w*)"? = (\d*)$/
             field, value = $1, $2
+          elsif opts[:conditions] =~ /^(?:"?#{table_name}"?.)?"?(\w*)"? IN \(([\d,]*)\)$/i
+            field, value = $1, $2
+            value = value.split(',')            
+          end
+
+          if field and value
             index = cached_index("by_#{field}")
-            return index.find_by_field([value], self, args.first) if index
+            return index.find_by_field([value].flatten, self, args.first) if index          
           end
         end
       elsif not args.last.is_a?(Hash)
