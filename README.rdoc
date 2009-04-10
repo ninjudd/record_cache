@@ -16,14 +16,18 @@ reduce your database load.
   Foo.find_by_id(2)
   Foo.find_all_by_owner_id(3)
 
-Invalidation is handled for you using after_save and after_destroy filters.
+Invalidation is handled for you using after_commit callbacks.
 
 == Install:
 
-  sudo gem install cache_version
-  sudo gem install record_cache
+First, install the after_commit plugin from: http://github.com/GUI/after_commit/tree/master
 
-Requires the extended version of the memcache client (http://github.com/ninjudd/memcache).
+Then install the following gems:
+
+  sudo gem install ninjudd-ordered_set -s http://gems.github.com
+  sudo gem install ninjudd-memcache -s http://gems.github.com
+  sudo gem install ninjudd-cache_version -s http://gems.github.com
+  sudo gem install ninjudd-record_cache -s http://gems.github.com
 
 == License:
 

@@ -206,8 +206,7 @@ module RecordCache
       end
       
       if first_index
-        after_save    :invalidate_record_cache
-        after_destroy :invalidate_record_cache
+        after_commit :invalidate_record_cache
       end
     end
 
