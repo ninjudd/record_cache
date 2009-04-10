@@ -3,6 +3,7 @@ require 'active_record'
 require 'ordered_set'
 require 'memcache_extended'
 require 'cache_version'
+require 'deferrable'
 
 $:.unshift(File.dirname(__FILE__))
 require 'record_cache/index'
@@ -10,7 +11,7 @@ require 'record_cache/set'
 require 'record_cache/scope'
 
 module RecordCache
-  VERSION = '0.9.2'
+  VERSION = '0.9.3'
 
   def self.config(opts = nil)
     if opts
@@ -24,6 +25,20 @@ module RecordCache
     def invalidate_record_cache
       self.class.each_cached_index do |index|
         index.invalidate_model(self)
+      end
+    end
+
+    def invalidate_record_cache_deferred
+      self.class.each_cached_index do |index|
+        # Have to invalidate both before and after commit.
+        index.invalidate_model(self)
+        index.invalidate_model(self, true)
+      end
+    end
+
+    def complete_deferred_record_cache_invalidations
+      self.class.each_cached_index do |index|
+        index.complete_deferred
       end
     end
 
@@ -206,7 +221,10 @@ module RecordCache
       end
       
       if first_index
-        after_commit :invalidate_record_cache
+        after_save     :invalidate_record_cache_deferred
+        after_destroy  :invalidate_record_cache_deferred
+        after_commit   :complete_deferred_record_cache_invalidations
+        after_rollback :complete_deferred_record_cache_invalidations
       end
     end
 

@@ -1,15 +1,16 @@
 module RecordCache
   class Index
+    include Deferrable
+
     attr_reader :model_class, :index_field, :fields, :scope, :order_by, :limit, :cache, :expiry, :name, :prefix
     
     NULL = 'NULL'
     
     def initialize(opts)
-      raise ':by => index_field required for cache'    if opts[:by].nil?
+      raise ':by => index_field required for cache'       if opts[:by].nil?
       raise 'explicit name or prefix required with scope' if opts[:scope] and opts[:name].nil? and opts[:prefix].nil?
 
       @auto_name     = opts[:name].nil?      
-      @write_ahead   = opts[:write_ahead]
       @cache         = opts[:cache] || CACHE
       @expiry        = opts[:expiry]
       @model_class   = opts[:class]
@@ -28,7 +29,6 @@ module RecordCache
     end
 
     def auto_name?;     @auto_name;     end
-    def write_ahead?;   @write_ahead;   end
     def disallow_null?; @disallow_null; end
 
     def full_record?
@@ -172,23 +172,18 @@ module RecordCache
       invalidate_from_conditions_lambda(conditions).call
     end
     
-    def invalidate_model(model)
+    def invalidate_model(model, defer = false)
       attribute     = model.send(index_field)
       attribute_was = model.attr_was(index_field)
-
       if scope.match_previous?(model)
-        if write_ahead?
-          remove_from_cache(model)
-        else
+        deferred(defer) do
           invalidate(attribute_was)
         end
       end
 
       if scope.match_current?(model)
-        if write_ahead?
-          add_to_cache(model)
-        elsif not (scope.match_previous?(model) and attribute_was == attribute)
-          invalidate(attribute) 
+        deferred(defer) do
+          invalidate(attribute)
         end
       end
     end
@@ -268,37 +263,6 @@ module RecordCache
         conditions << "#{index_field} IN (#{values})"
       end
       conditions.join(' OR ')
-    end
-
-    def remove_from_cache(model)
-      record = model.attributes
-      key    = model.attr_was(index_field)
-      
-      cache.in_namespace(namespace) do
-        cache.with_lock(key) do
-          if records = cache.get(key)
-            records.delete(record)
-            cache.set(key, records)
-          end
-        end
-      end
-    end
-
-    def add_to_cache(model)
-      record = model_to_record(model)
-      key    = record[index_field].to_s
-
-      cache.in_namespace(namespace) do
-        cache.with_lock(key) do
-          if records = cache.get(key)
-            records.delete(record)
-            records << record
-            records.sort!(order_by) if order_by
-            records.limit!(limit)   if limit
-            cache.set(key, records)
-          end
-        end
-      end
     end
 
     def select_fields

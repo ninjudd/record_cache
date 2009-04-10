@@ -49,7 +49,7 @@ class Pet < ActiveRecord::Base
 
   record_cache :by => :id
   record_cache :id, :by => :breed_id
-  record_cache :id, :by => :color_id, :write_ahead => true
+  record_cache :id, :by => :color_id
 
   record_cache :id, :by => :color_id, :scope => {:sex => 'm'}, :prefix => 'male'
   record_cache :id, :by => :color_id, :scope => {:sex => 'f'}, :prefix => 'female'
