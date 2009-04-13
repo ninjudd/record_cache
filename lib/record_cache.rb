@@ -11,8 +11,6 @@ require 'record_cache/set'
 require 'record_cache/scope'
 
 module RecordCache
-  VERSION = '0.9.3'
-
   def self.config(opts = nil)
     if opts
       config.merge!(opts)
