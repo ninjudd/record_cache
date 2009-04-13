@@ -1,22 +1,5 @@
 require File.dirname(__FILE__) + '/test_helper.rb'
 
-CACHE = MemCache.new(
-  :ttl=>1800,
-  :compression=>false,
-  :readonly=>false,
-  :debug=>false,
-  :c_threshold=>10000,
-  :urlencode=>false
-)
-
-ActiveRecord::Base.establish_connection(
-  :adapter  => "postgresql",
-  :host     => "localhost",
-  :username => "postgres",
-  :password => "",
-  :database => "record_cache_test"
-)
-
 class CreateTables < ActiveRecord::Migration 
   def self.up
     create_table :pets do |t|
@@ -68,17 +51,17 @@ end
 class Color < ActiveRecord::Base
 end
 
-module RecordCache
-  class Test < Test::Unit::TestCase
-    def setup
+class RecordCacheTest < Test::Unit::TestCase
+  context "With a memcache and db connection" do
+    setup do
       system('memcached -d')
       CACHE.servers = ["localhost:11211"]
-
+      
       CreateTables.up
       CacheVersionMigration.up
     end
     
-    def teardown
+    teardown do
       system('killall memcached')
       
       CreateTables.down
@@ -86,7 +69,7 @@ module RecordCache
       RecordCache::Index.enable_db
     end
     
-    def test_field_lookup
+    should 'create field lookup functions' do
       dog   = Breed.new(:name => 'pitbull retriever')
       cat   = Breed.new(:name => 'house cat')
       willy = Cat.create(:name => 'Willy', :breed => cat)
@@ -96,7 +79,7 @@ module RecordCache
       assert_equal expected, Pet.id_by_breed_id([dog.id, cat.id, 100, 101])      
     end
     
-    def test_cache
+    should 'return cached values without accessing the database' do
       color = Color.new(:name => 'black & white')
       dog   = Breed.new(:name => 'pitbull retriever')
       cat   = Breed.new(:name => 'house cat')
@@ -128,7 +111,7 @@ module RecordCache
       end
     end
 
-    def test_find_multiple
+    should 'return multiple cached values without accessing the database' do
       color1 = Color.new(:name => 'black & white')
       color2 = Color.new(:name => 'speckled')
       breed1 = Breed.new(:name => 'pitbull retriever')
@@ -163,7 +146,7 @@ module RecordCache
       assert_equal [daisy, baseball], Dog.find_all_by_breed_id(breed1.id)
     end
 
-    def test_find_raw
+    should 'create raw find methods' do
       daisy = Dog.create(:name => 'Daisy')
       sammy = Dog.create(:name => 'Sammy')
       
@@ -174,7 +157,7 @@ module RecordCache
       assert_equal ['Sammy', 'Daisy'], raw_records.collect {|r| r['name']}
     end
 
-    def test_scope
+    should 'cache indexes using scope' do
       color  = Color.new(:name => 'black & white')
       breed1 = Breed.new(:name => 'pitbull retriever')
       breed2 = Breed.new(:name => 'pitbull terrier')
@@ -191,7 +174,7 @@ module RecordCache
       assert_equal [daisy, sammy, cousin], Dog.find_all_colors(color.id)
     end
 
-    def test_each_cached_index
+    should 'yield cached indexes' do
       count = 0
       Dog.each_cached_index do |index|
         count += 1
@@ -199,7 +182,7 @@ module RecordCache
       assert_equal 6, count
     end
     
-    def test_save
+    should 'invalidate indexes on save' do
       b_w   = Color.new(:name => 'black & white')
       brown = Color.new(:name => 'brown')
       breed = Breed.new(:name => 'mutt')
