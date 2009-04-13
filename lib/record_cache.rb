@@ -26,13 +26,13 @@ module RecordCache
       self.class.each_cached_index do |index|
         index.invalidate_model(self)
       end
+      clear_deferred
     end
 
     def invalidate_record_cache_deferred
       self.class.each_cached_index do |index|
         # Have to invalidate both before and after commit.
         index.invalidate_model(self)
-        index.invalidate_model(self, true)
       end
     end
 
