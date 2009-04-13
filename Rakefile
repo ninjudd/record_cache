@@ -6,10 +6,10 @@ begin
   require 'jeweler'
   Jeweler::Tasks.new do |s|
     s.name = "record_cache"
-    s.summary = %Q{TODO}
-    s.email = "justin@geni.com"
+    s.summary = %Q{Active Record caching and indexing in memcache. An alternative to cache_fu}
+    s.email = "code@justinbalthrop.com"
     s.homepage = "http://github.com/ninjudd/record_cache"
-    s.description = "TODO"
+    s.description = "Active Record caching and indexing in memcache"
     s.authors = ["Justin Balthrop"]
   end
 rescue LoadError
