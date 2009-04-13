@@ -24,9 +24,9 @@ module RecordCache
   module InstanceMethods
     def invalidate_record_cache
       self.class.each_cached_index do |index|
-        index.invalidate_model(self)
+        index.invalidate_model(self) 
+        index.clear_deferred
       end
-      clear_deferred
     end
 
     def invalidate_record_cache_deferred
