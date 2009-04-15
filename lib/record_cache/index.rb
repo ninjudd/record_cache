@@ -225,7 +225,15 @@ module RecordCache
         end
       end
     end
-        
+    
+    def cached_set(id)
+      # Used for debugging. Gives you the RecordCache::Set that is currently in the cache.
+      id = stringify([id]).first
+      cache.in_namespace(namespace) do
+        cache.get(id)
+      end
+    end
+
   private
 
     MAX_FETCH = 1000

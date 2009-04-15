@@ -1,9 +1,27 @@
 module RecordCache
   class Set
-    attr_reader :model_class, :fields_hash
+    attr_reader :model_class, :fields_hash, :time, :hostname
+
+    def self.source_tracking?
+      @source_tracking
+    end
+
+    def self.source_tracking=(value)
+      @source_tracking = value
+    end
+
+    def self.hostname
+      @hostname ||= Socket.gethostname
+    end
 
     def initialize(model_class, fields_hash = nil)
       raise 'valid model class required' unless model_class
+
+      if self.class.source_tracking?
+        @time     = Time.now
+        @hostname = self.class.hostname
+      end
+
       @model_class = model_class
       @fields_hash = fields_hash
       @records_by_type = {}
