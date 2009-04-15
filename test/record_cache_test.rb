@@ -1,5 +1,7 @@
 require File.dirname(__FILE__) + '/test_helper.rb'
 
+RecordCache::Set.source_tracking = true
+
 class CreateTables < ActiveRecord::Migration 
   def self.up
     create_table :pets do |t|
