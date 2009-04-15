@@ -1,6 +1,6 @@
 module RecordCache
   class Set
-    attr_reader :model_class, :fields_hash, :time, :hostname
+    attr_reader :model_class, :fields_hash, :time, :hostname, :dbhost
 
     def self.source_tracking?
       @source_tracking
@@ -16,15 +16,15 @@ module RecordCache
 
     def initialize(model_class, fields_hash = nil)
       raise 'valid model class required' unless model_class
+      @model_class = model_class
+      @fields_hash = fields_hash
+      @records_by_type = {}
 
       if self.class.source_tracking?
         @time     = Time.now
         @hostname = self.class.hostname
+        @dbhost   = RecordCache.db(model_class).instance_variable_get(:@config)[:host]
       end
-
-      @model_class = model_class
-      @fields_hash = fields_hash
-      @records_by_type = {}
     end
 
     def sort!(order_by)

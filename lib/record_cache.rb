@@ -18,7 +18,17 @@ module RecordCache
       @config ||= {}
     end
   end
-   
+
+  def self.db(model_class)
+    # Always use the master connection since we are caching.
+    db = model_class.connection
+    if defined?(DataFabric::ConnectionProxy) and db.kind_of?(DataFabric::ConnectionProxy) and not model_class.record_cache_config[:use_slave]
+      db.send(:master)
+    else
+      db
+    end
+  end
+
   module InstanceMethods
     def invalidate_record_cache
       self.class.each_cached_index do |index|
@@ -103,7 +113,7 @@ module RecordCache
       # Freeze ids to avoid race conditions.
       sql = "SELECT id FROM #{table_name} "
       self.send(:add_conditions!, sql, conditions, self.send(:scope, :find))
-      ids = RecordCache::Index.db(self).select_values(sql)
+      ids = RecordCache.db(self).select_values(sql)
 
       return if ids.empty?
       conditions = "id IN (#{ids.join(',')})"
