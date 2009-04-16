@@ -1,6 +1,6 @@
 module RecordCache
   class Set
-    attr_reader :model_class, :fields_hash, :time, :hostname, :dbhost
+    attr_reader :model_class, :fields_hash, :created_at, :updated_at, :hostname, :dbhost
 
     def self.source_tracking?
       @source_tracking
@@ -21,9 +21,9 @@ module RecordCache
       @records_by_type = {}
 
       if self.class.source_tracking?
-        @time     = Time.now
-        @hostname = self.class.hostname
-        @dbhost   = RecordCache.db(model_class).instance_variable_get(:@config)[:host]
+        @created_at = Time.now
+        @hostname   = self.class.hostname
+        @dbhost     = RecordCache.db(model_class).instance_variable_get(:@config)[:host]
       end
     end
 
@@ -51,6 +51,7 @@ module RecordCache
     end
 
     def <<(record)
+      mark_updated!
       record_type  = record['type']
       record['id'] = record['id'].to_i if record.has_key?('id')
       
@@ -61,6 +62,7 @@ module RecordCache
     
     def delete(record)
       raise 'cannot delete record without id' unless record.has_key?('id')
+      mark_updated!
       record_type = record['type']
       id          = record['id'].to_i
 
@@ -126,6 +128,10 @@ module RecordCache
 
   private
     
+    def mark_updated!
+      @updated_at = Time.now if self.class.source_tracking?
+    end
+
     def type_cast(field, value)
       column = model_class.columns_hash[field.to_s]
       raise 'column not found in #{model_class} for field #{field}' unless column
