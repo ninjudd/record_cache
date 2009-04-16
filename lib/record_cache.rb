@@ -22,8 +22,8 @@ module RecordCache
   def self.db(model_class)
     # Always use the master connection since we are caching.
     db = model_class.connection
-    if defined?(DataFabric::ConnectionProxy) and db.kind_of?(DataFabric::ConnectionProxy) and not model_class.record_cache_config[:use_slave]
-      db.send(:master)
+    if defined?(DataFabric::ConnectionProxy) and db.kind_of?(DataFabric::ConnectionProxy)
+      model_class.record_cache_config[:use_slave] ? db.send(:connection) : db.send(:master)
     else
       db
     end
