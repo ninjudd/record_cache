@@ -151,7 +151,7 @@ module RecordCache
       if opts
         record_cache_config.merge!(opts)
       else
-        @record_cache_config ||= RecordCache.config
+        @record_cache_config ||= RecordCache.config.clone
       end
     end
   end
