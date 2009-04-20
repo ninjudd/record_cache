@@ -321,7 +321,7 @@ module RecordCache
     def select_fields
       if @select_fields.nil?
         if full_record?
-          @select_fields = '*'
+          @select_fields = model_class.respond_to?(:default_select, true) ? model_class.send(:default_select, nil) : '*'
         else
           @select_fields = [index_field, 'id'] + fields
           @select_fields << 'type' if base_class?
@@ -332,11 +332,15 @@ module RecordCache
     end
     
     def base_class?
-      @base_class ||= ( model_class == model_class.base_class and model_class.columns_hash.has_key?('type') )
+      @base_class ||= single_table_inderitance? and model_class == model_class.base_class
     end
     
     def sub_class?
-      @base_class ||= ( model_class != model_class.base_class )
+      @base_class ||= single_table_inderitance? and model_class != model_class.base_class
+    end
+
+    def single_table_inderitance?
+      @single_table_inderitance ||= model_class.columns_hash.has_key?(model_class.inheritance_column)
     end
 
     def quote_index_value(value)

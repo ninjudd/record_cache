@@ -94,14 +94,6 @@ module RecordCache
       end
     end
     
-    def cached_index(name)
-      name = name.to_s
-      if cached_indexes and cached_indexes[name]
-        return cached_indexes[name]
-      end
-      nil
-    end
-    
     def invalidate_from_conditions(conditions, flag = nil)
       if conditions.nil?
         # Just invalidate all indexes.
@@ -140,11 +132,37 @@ module RecordCache
 
       result
     end
-    
-    def each_cached_index
-      cached_indexes and cached_indexes.values.each do |index|
-        yield(index)
+
+    def cached_indexes
+      @cached_indexes ||= {}
+    end
+
+    def cached_index(name)
+      name = name.to_s
+      cached_indexes[name] || base_class.respond_to?(:cached_index) && base_class.cached_index(name)
+    end
+
+    def add_cached_index(index)
+      name  = index.name
+      count = nil
+      # Make sure the key is unique.
+      while cached_indexes["#{name}#{count}"]
+        count ||= 0
+        count += 1
       end
+      cached_indexes["#{name}#{count}"] = index
+    end
+
+    def each_cached_index
+      cached_index_names.each do |index_name|
+        yield cached_index(index_name)
+      end      
+    end
+
+    def cached_index_names
+      names = cached_indexes.keys
+      names.concat(base_class.cached_index_names) if base_class != self and base_class.respond_to?(:cached_index_names)
+      names.uniq
     end
 
     def record_cache_config(opts = nil)
@@ -172,7 +190,7 @@ module RecordCache
 
       index = RecordCache::Index.new(opts)
       add_cached_index(index)
-      first_index = cached_indexes.size == 1
+      first_index = (cached_indexes.size == 1)
 
       (class << self; self; end).module_eval do
         if index.includes_id?
@@ -234,18 +252,6 @@ module RecordCache
         after_commit   :complete_deferred_record_cache_invalidations
         after_rollback :complete_deferred_record_cache_invalidations
       end
-    end
-
-    def add_cached_index(index)      
-      self.cached_indexes ||= {}
-      name  = index.name
-      count = nil
-      # Make sure the key is unique.
-      while cached_indexes["#{name}#{count}"]
-        count ||= 0
-        count += 1
-      end
-      cached_indexes["#{name}#{count}"] = index
     end
   end
 end

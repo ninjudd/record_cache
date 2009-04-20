@@ -4,6 +4,7 @@ RecordCache::Set.source_tracking = true
 
 class CreateTables < ActiveRecord::Migration 
   def self.up
+    down
     create_table :pets do |t|
       t.column :breed_id, :bigint
       t.column :name, :string
@@ -22,11 +23,13 @@ class CreateTables < ActiveRecord::Migration
   end
 
   def self.down
-    drop_table :pets
-    drop_table :breeds
-    drop_table :colors
+    drop_table :pets   rescue nil
+    drop_table :breeds rescue nil
+    drop_table :colors rescue nil
   end
 end
+
+CreateTables.up
 
 class Pet < ActiveRecord::Base
   belongs_to :breed
