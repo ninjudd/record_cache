@@ -139,7 +139,9 @@ module RecordCache
 
     def cached_index(name)
       name = name.to_s
-      cached_indexes[name] || base_class.respond_to?(:cached_index) && base_class.cached_index(name)
+      index = cached_indexes[name]
+      index ||= base_class.cached_index(name) if base_class != self and base_class.respond_to?(:cached_index)
+      index
     end
 
     def add_cached_index(index)
