@@ -2,7 +2,7 @@ module RecordCache
   class Index
     include Deferrable
 
-    attr_reader :model_class, :index_field, :fields, :scope, :order_by, :limit, :cache, :expiry, :name, :prefix
+    attr_reader :model_class, :index_field, :fields, :order_by, :limit, :cache, :expiry, :name, :prefix
     
     NULL = 'NULL'
     
@@ -23,10 +23,7 @@ module RecordCache
       @order_by      = opts[:order_by]
       @limit         = opts[:limit]
       @disallow_null = opts[:null] == false
-      
-      scope_query = opts[:scope] || {}
-      scope_query[:type] = model_class.to_s if sub_class?
-      @scope = Scope.new(model_class, scope_query)
+      @scope_query   = opts[:scope] || {}
     end
 
     def auto_name?;     @auto_name;     end
@@ -198,6 +195,15 @@ module RecordCache
       end
     end
         
+    def scope_query
+      @scope_query[:type] ||= model_class.to_s if sub_class?
+      @scope_query
+    end
+
+    def scope
+      @scope ||= Scope.new(model_class, scope_query)
+    end
+
     @@disable_db = false
     def self.disable_db
       @@disable_db = true
@@ -332,15 +338,15 @@ module RecordCache
     end
     
     def base_class?
-      @base_class ||= single_table_inderitance? and model_class == model_class.base_class
+      @base_class ||= single_table_inheritance? and model_class == model_class.base_class
     end
     
     def sub_class?
-      @base_class ||= single_table_inderitance? and model_class != model_class.base_class
+      @sub_class ||= single_table_inheritance? and model_class != model_class.base_class
     end
 
-    def single_table_inderitance?
-      @single_table_inderitance ||= model_class.columns_hash.has_key?(model_class.inheritance_column)
+    def single_table_inheritance?
+      @single_table_inheritance ||= model_class.columns_hash.has_key?(model_class.inheritance_column)
     end
 
     def quote_index_value(value)
