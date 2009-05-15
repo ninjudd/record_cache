@@ -1,10 +1,10 @@
 Gem::Specification.new do |s|
   s.name = %q{record_cache}
-  s.version = "0.9.3"
+  s.version = "0.9.4"
 
   s.required_rubygems_version = Gem::Requirement.new(">= 0") if s.respond_to? :required_rubygems_version=
   s.authors = ["Justin Balthrop"]
-  s.date = %q{2009-04-13}
+  s.date = %q{2009-05-15}
   s.description = %q{Active Record caching and indexing in memcache}
   s.email = %q{code@justinbalthrop.com}
   s.files = ["README.rdoc", "VERSION.yml", "lib/record_cache", "lib/record_cache/index.rb", "lib/record_cache/scope.rb", "lib/record_cache/set.rb", "lib/record_cache.rb", "test/record_cache_test.rb", "test/test_helper.rb"]
