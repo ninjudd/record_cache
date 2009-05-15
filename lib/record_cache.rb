@@ -199,7 +199,11 @@ module RecordCache
           [:first, :all, :set, :raw, :ids].each do |type|
             next if type == :ids and index.name == 'by_id'
             define_method( index.find_method_name(type) ) do |keys|
-              index.find_by_field(keys, self, type)
+              if self.send(:scope,:find) and self.send(:scope,:find).any?
+                self.method_missing(index.find_method_name(type), keys)
+              else
+                index.find_by_field(keys, self, type)
+              end
             end
           end
         end
