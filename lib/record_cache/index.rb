@@ -307,8 +307,9 @@ module RecordCache
 
     def add_to_cache(model)
       record = model_to_record(model)
-      key    = record[index_field].to_s
-
+      return unless record
+      key = record[index_field].to_s
+      
       cache.in_namespace(namespace) do
         cache.with_lock(key) do
           now_and_later do
