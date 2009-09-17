@@ -293,9 +293,9 @@ module RecordCache
       record = model.attributes
       key    = model.attr_was(index_field)
       
-      cache.in_namespace(namespace) do
-        cache.with_lock(key) do
-          now_and_later do
+      now_and_later do
+        cache.in_namespace(namespace) do
+          cache.with_lock(key) do
             if records = cache.get(key)
               records.delete(record)
               cache.set(key, records)
@@ -307,11 +307,12 @@ module RecordCache
 
     def add_to_cache(model)
       record = model_to_record(model)
-      key    = record[index_field].to_s
-
-      cache.in_namespace(namespace) do
-        cache.with_lock(key) do
-          now_and_later do
+      return unless record
+      key = record[index_field].to_s
+      
+      now_and_later do
+        cache.in_namespace(namespace) do
+          cache.with_lock(key) do
             if records = cache.get(key)
               records.delete(record)
               records << record
