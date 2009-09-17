@@ -60,15 +60,13 @@ class RecordCacheTest < Test::Unit::TestCase
   context "With a memcache and db connection" do
     setup do
       system('memcached -d')
-      CACHE.servers = ["localhost:11211"]
-      
+      CACHE.reset
       CreateTables.up
       CacheVersionMigration.up
     end
     
     teardown do
       system('killall memcached')
-      
       CreateTables.down
       CacheVersionMigration.down
       RecordCache::Index.enable_db

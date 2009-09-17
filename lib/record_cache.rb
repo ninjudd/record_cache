@@ -1,7 +1,7 @@
 require 'rubygems'
+require 'memcache'
 require 'active_record'
 require 'ordered_set'
-require 'memcache_extended'
 require 'cache_version'
 require 'deferrable'
 
