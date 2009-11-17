@@ -2,7 +2,7 @@ module RecordCache
   class Index
     include Deferrable
 
-    attr_reader :model_class, :index_field, :fields, :order_by, :limit, :cache, :expiry, :name, :prefix
+    attr_reader :model_class, :index_field, :fields, :order_by, :limit, :expiry, :name, :prefix
     
     NULL = 'NULL'
     
@@ -24,6 +24,14 @@ module RecordCache
       @limit         = opts[:limit]
       @disallow_null = opts[:null] == false
       @scope_query   = opts[:scope] || {}
+    end
+
+    def cache
+      if RecordCache.config[:thread_safe]
+        Thread.current[:record_cache] ||= @cache.clone
+      else
+        @cache
+      end
     end
 
     def auto_name?;     @auto_name;     end
