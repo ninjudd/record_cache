@@ -139,7 +139,7 @@ module RecordCache
       records_by_key = get_records(keys)
 
       field_by_index = {}
-      all_fields = [].to_ordered_set
+      all_fields = []
       keys.each do |key|
         records = records_by_key[key]
         fields = field ? records.fields(field, model_class) : records.all_fields(model_class, :except => index_field)
@@ -153,7 +153,7 @@ module RecordCache
         end
       end
       if flag == :all
-        all_fields.to_a
+        all_fields.uniq
       else
         field_by_index
       end

@@ -20,15 +20,14 @@ Invalidation is handled for you using callbacks.
 
 == Install:
 
-First, install the after_commit plugin from: http://github.com/ninjudd/after_commit
+  sudo gem install record_cache -s http://gemcutter.org
 
-Then install the following gems:
+== Dependencies:
 
-  sudo gem install ninjudd-deferrable -s http://gems.github.com
-  sudo gem install ninjudd-ordered_set -s http://gems.github.com
-  sudo gem install ninjudd-memcache -s http://gems.github.com
-  sudo gem install ninjudd-cache_version -s http://gems.github.com
-  sudo gem install ninjudd-record_cache -s http://gems.github.com
+* {after_commit}[http://github.com/freelancing-god/after_commit]
+* {deferrable}[http://github.com/ninjudd/deferrable]
+* {memcache}[http://github.com/ninjudd/memcache]
+* {cache_version}[http://github.com/ninjudd/cache_version]
 
 == License:
 
