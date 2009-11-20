@@ -25,9 +25,7 @@ Invalidation is handled for you using callbacks.
 == Dependencies:
 
 * {after_commit}[http://github.com/freelancing-god/after_commit]
-* {deferrable}[http://github.com/ninjudd/deferrable]
 * {memcache}[http://github.com/ninjudd/memcache]
-* {cache_version}[http://github.com/ninjudd/cache_version]
 
 == License:
 

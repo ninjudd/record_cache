@@ -15,6 +15,7 @@ begin
     s.add_dependency('deferrable', '>= 0.1.0')
     s.add_dependency('memcache', '>= 1.0.0')
     s.add_dependency('cache_version', '>= 0.9.4')
+    s.add_dependency('activerecord', '>= 0')
   end
 rescue LoadError
   puts "Jeweler not available. Install it with: sudo gem install technicalpickles-jeweler -s http://gems.github.com"
