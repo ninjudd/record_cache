@@ -6,17 +6,21 @@ reduce your database load.
 
 == Usage:
 
-  class Foo < ActiveRecord
+  require 'record_cache'
+
+  class User < ActiveRecord
     record_cache :by => :id
-    record_cache :id, :by => :owner_id
+    record_cache :id, :by => :username
   end
 
   # These will use the cache now.
-  Foo.find(1)
-  Foo.find_by_id(2)
-  Foo.find_all_by_owner_id(3)
+  User.find(1)
+  User.find_by_id(2)
+  User.find_all_by_username('chuck')
 
-Invalidation is handled for you using callbacks.
+Invalidation is handled for you using callbacks. Be careful though if you modify records
+directly using SQL. Both update_all and delete_all handle invalidations for you, but other
+direct SQL will not.
 
 == Install:
 
