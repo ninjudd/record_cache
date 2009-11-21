@@ -17,6 +17,7 @@ begin
     s.add_dependency('cache_version', '>= 0.9.4')
     s.add_dependency('activerecord', '>= 2.0.0')
   end
+  Jeweler::GemcutterTasks.new
 rescue LoadError
   puts "Jeweler not available. Install it with: sudo gem install technicalpickles-jeweler -s http://gems.github.com"
 end
