@@ -26,6 +26,7 @@ Gem::Specification.new do |s|
      "lib/record_cache/index.rb",
      "lib/record_cache/scope.rb",
      "lib/record_cache/set.rb",
+     "record_cache.gemspec",
      "test/record_cache_test.rb",
      "test/test_helper.rb"
   ]
