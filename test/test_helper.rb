@@ -4,7 +4,7 @@ require 'shoulda'
 require 'mocha'
 
 $LOAD_PATH.unshift File.dirname(__FILE__) + "/../lib"
-['deep_clonable', 'ordered_set', 'cache_version', 'model_set', 'memcache', 'deferrable'].each do |dir|
+['cache_version', 'model_set', 'memcache', 'deferrable'].each do |dir|
   $LOAD_PATH.unshift File.dirname(__FILE__) + "/../../#{dir}/lib"
 end
 
