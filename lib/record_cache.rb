@@ -19,11 +19,11 @@ module RecordCache
   end
 
   def self.db(model_class)
-    @@has_data_fabric ||= defined?(DataFabric::ConnectionProxy)
-    db                  = model_class.connection
+    db = model_class.connection
 
     # Always use the master connection since we are caching.
-    if @@has_data_fabric and db.kind_of?(DataFabric::ConnectionProxy)
+    @has_data_fabric ||= defined?(DataFabric::ConnectionProxy)
+    if @has_data_fabric and db.kind_of?(DataFabric::ConnectionProxy)
       model_class.record_cache_config[:use_slave] ? db.send(:connection) : db.send(:master)
     else
       db
@@ -33,7 +33,7 @@ module RecordCache
   module InstanceMethods
     def invalidate_record_cache
       self.class.each_cached_index do |index|
-        index.invalidate_model(self) 
+        index.invalidate_model(self)
         index.clear_deferred
       end
     end
@@ -56,14 +56,14 @@ module RecordCache
       ['id', 'type'].include?(attr) ? send(attr) : send(:attribute_was, attr)
     end
   end
-    
-  module ClassMethods    
+
+  module ClassMethods
     def find_with_caching(*args, &block)
       if args.last.is_a?(Hash)
         args.last.delete_if {|k,v| v.nil?}
         args.pop if args.last.empty?
       end
-      
+
       if [:all, :first, :last].include?(args.first)
         opts = args.last
         if opts.is_a?(Hash) and opts.keys == [:conditions]
@@ -82,7 +82,7 @@ module RecordCache
 
       find_without_caching(*args, &block)
     end
-    
+
     def update_all_with_invalidate(updates, conditions = nil)
       invalidate_from_conditions(conditions, :update) do |conditions|
         update_all_without_invalidate(updates, conditions)
@@ -94,7 +94,7 @@ module RecordCache
         delete_all_without_invalidate(conditions)
       end
     end
-    
+
     def invalidate_from_conditions(conditions, flag = nil)
       if conditions.nil?
         # Just invalidate all indexes.
@@ -121,9 +121,9 @@ module RecordCache
         result = yield(conditions)
 
         # Finish invalidating with prior attributes.
-        lambdas.each {|l| l.call}      
+        lambdas.each {|l| l.call}
       end
-    
+
       # Invalidate again afterwards if we are updating (or for the first time if no block was given).
       if flag == :update or not block_given?
         each_cached_index do |index|
@@ -159,7 +159,7 @@ module RecordCache
     def each_cached_index
       cached_index_names.each do |index_name|
         yield cached_index(index_name)
-      end      
+      end
     end
 
     def cached_index_names
@@ -215,7 +215,7 @@ module RecordCache
           define_method( "all_#{index.name.pluralize}_by_#{index.index_field}" ) do |keys|
             index.field_lookup(keys, self, field, :all)
           end
-          
+
           define_method( "#{index.name.pluralize}_by_#{index.index_field}" ) do |keys|
             index.field_lookup(keys, self, field)
           end
@@ -224,7 +224,7 @@ module RecordCache
             index.field_lookup(keys, self, field, :first)
           end
         end
-        
+
         if index.auto_name?
           (field_lookup + index.fields).each do |field|
             next if field == index.index_field
@@ -239,20 +239,20 @@ module RecordCache
             define_method( "#{prefix}#{plural_field}_by_#{index.index_field}"  ) do |keys|
               index.field_lookup(keys, self, field)
             end
-            
+
             define_method( "#{prefix}#{field}_by_#{index.index_field}"  ) do |keys|
               index.field_lookup(keys, self, field, :first)
             end
           end
         end
-              
+
         if first_index
           alias_method_chain :find, :caching
           alias_method_chain :update_all, :invalidate
           alias_method_chain :delete_all, :invalidate
         end
       end
-      
+
       if first_index
         after_save     :invalidate_record_cache_deferred
         after_destroy  :invalidate_record_cache_deferred
