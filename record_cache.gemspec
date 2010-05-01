@@ -5,11 +5,11 @@
 
 Gem::Specification.new do |s|
   s.name = %q{record_cache}
-  s.version = "0.9.9"
+  s.version = "0.9.10"
 
   s.required_rubygems_version = Gem::Requirement.new(">= 0") if s.respond_to? :required_rubygems_version=
   s.authors = ["Justin Balthrop"]
-  s.date = %q{2009-11-20}
+  s.date = %q{2010-05-01}
   s.description = %q{Active Record caching and indexing in memcache}
   s.email = %q{code@justinbalthrop.com}
   s.extra_rdoc_files = [
