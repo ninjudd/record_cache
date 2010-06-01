@@ -2,6 +2,7 @@ require 'test/unit'
 require 'rubygems'
 require 'shoulda'
 require 'mocha'
+require 'pp'
 
 $LOAD_PATH.unshift File.dirname(__FILE__) + "/../lib"
 ['cache_version', 'model_set', 'memcache', 'deferrable'].each do |dir|
