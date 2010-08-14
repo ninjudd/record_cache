@@ -277,8 +277,10 @@ end
 
 ActiveRecord::Base.send(:extend,  RecordCache::ActiveRecordExtension)
 
-class PGconn
-  def self.quote_ident(name)
-    %("#{name}")
+unless defined?(PGconn) and PGconn.respond_to?(:quote_ident)
+  class PGconn
+    def self.quote_ident(name)
+      %("#{name}")
+    end
   end
 end

@@ -12,7 +12,7 @@ module RecordCache
 
       @auto_name     = opts[:name].nil?
       @write_ahead   = opts[:write_ahead]
-      @cache         = opts[:cache] || CACHE
+      @cache         = opts[:cache].kind_of?(Symbol) ? Memcache.pool[opts[:cache]] : (opts[:cache] || CACHE)
       @expiry        = opts[:expiry]
       @model_class   = opts[:class]
       @set_class     = opts[:set_class] || "#{@model_class}Set"
