@@ -57,7 +57,7 @@ module RecordCache
     def fields_hash
       if @fields_hash.nil?
         if full_record?
-          @fields_hash ||= model_class.column_names.hash
+          @fields_hash ||= model_class.column_names.sort.hash
         else
           @fields_hash ||= fields.collect {|field| field.to_s}.hash
         end
