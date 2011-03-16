@@ -160,6 +160,8 @@ module RecordCache
     end
 
     def invalidate(*keys)
+      return if model_class.record_cache_config[:disable_write]
+
       keys = stringify(keys)
       cache.in_namespace(namespace) do
         keys.each do |key|
@@ -298,6 +300,8 @@ module RecordCache
     end
 
     def remove_from_cache(model)
+      return if model_class.record_cache_config[:disable_write]
+
       record = model.attributes
       key    = model.attr_was(index_field) || NULL
 
@@ -314,6 +318,8 @@ module RecordCache
     end
 
     def add_to_cache(model)
+      return if model_class.record_cache_config[:disable_write]
+
       record = model_to_record(model)
       return unless record
       key = record[index_field] || NULL
