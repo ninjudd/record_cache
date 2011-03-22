@@ -22,7 +22,7 @@ CACHE = Memcache.new(:servers => 'localhost')
 ActiveRecord::Base.establish_connection(
   :adapter  => "postgresql",
   :host     => "localhost",
-  :username => "postgres",
+  :username => `whoami`.chomp,
   :password => "",
   :database => "test"
 )
