@@ -74,16 +74,16 @@ module RecordCache
             if opts[:conditions].keys.size == 1
               opts[:conditions].each {|f,v| field, value = f,v}
             end
-          elsif opts[:conditions] =~ /^(?:"?#{table_name}"?.)?"?(\w*)"? = (\d*)$/
+          elsif opts[:conditions] =~ /^(?:"?#{table_name}"?\.)?"?(\w+)"? = (?:(\d+)|'(\w+)')$/i
+            field, value = $1, ($3 || $2)
+          elsif opts[:conditions] =~ /^(?:"?#{table_name}"?\.)?"?(\w+)"? IN \(([\d,]*)\)$/i
             field, value = $1, $2
-          elsif opts[:conditions] =~ /^(?:"?#{table_name}"?.)?"?(\w*)"? IN \(([\d,]*)\)$/i
-            field, value = $1, $2
-            value = value.split(',')            
+            value = value.split(',')
           end
 
           if field and value
             index = cached_index("by_#{field}")
-            return index.find_by_field([value].flatten, self, args.first) if index          
+            return index.find_by_field([value].flatten, self, args.first) if index
           end
         end
       elsif not args.last.is_a?(Hash)
