@@ -24,12 +24,14 @@ direct SQL will not.
 
 == Install:
 
-  sudo gem install record_cache -s http://gemcutter.org
+  gem install record_cache
 
 == Dependencies:
 
 * {after_commit}[http://github.com/freelancing-god/after_commit]
 * {memcache}[http://github.com/ninjudd/memcache]
+
+RecordCache is confirmed to work with Rails 2.3.9. It does not currently work with Rails 3.
 
 == License:
 
