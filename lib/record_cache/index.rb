@@ -182,7 +182,7 @@ module RecordCache
     end
 
     def invalidate_model(model)
-      attribute     = model.send(index_field)
+      attribute     = model.read_attribute(index_field)
       attribute_was = model.attr_was(index_field)
       if scope.match_previous?(model)
         if write_ahead?

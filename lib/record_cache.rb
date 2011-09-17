@@ -53,7 +53,11 @@ module RecordCache
 
     def attr_was(attr)
       attr = attr.to_s
-      ['id', 'type'].include?(attr) ? send(attr) : send(:attribute_was, attr)
+      if ['id', 'type'].include?(attr) or not attribute_changed?(attr)
+        read_attribute(attr)
+      else
+        changed_attributes[attr]
+      end
     end
   end
 
