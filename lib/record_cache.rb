@@ -89,6 +89,43 @@ module RecordCache
 
       find_without_caching(*args, &block)
     end
+
+    # Match sql with regex, locate the index and query cache/db
+    def match_and_find_by_field(sql, regex, type)
+      match_data = regex.match(sql)
+      if match_data
+          field = match_data[1]
+          value = (match_data[3] || match_data[2])
+          index = cached_index("by_#{field}")
+          if index
+            records = index.find_by_field([value], self, type)
+            # we must return an array
+            if records.is_a?(Array)
+              return records
+            end
+            return records ? [records]  : []
+          end
+      end
+    end
+    private :match_and_find_by_field
+
+    # ActiveRecord ends up making a call to find_by_sql in the case of associations
+    # for example in a call to Company.first.employees
+    def find_by_sql_with_caching(*args, &block)
+      if args.is_a?(Array) and args.size==1
+        regex_nolimit   = /^SELECT\s+\S+\.\*\s+FROM\s+\S+\s+WHERE\s+\("?#{table_name}"?."?(\w+)"?\s+=\s+(?:(\d+)|'(\w+)')\)$/
+        regex_withlimit = /^SELECT\s+\S+\.\*\s+FROM\s+\S+\s+WHERE\s+\("?#{table_name}"?."?(\w+)"?\s+=\s+(?:(\d+)|'(\w+)')\)\s+LIMIT\s+1$/
+        if records = match_and_find_by_field(args.first, regex_nolimit, :all)
+          return records
+        elsif records = match_and_find_by_field(args.first, regex_withlimit, :first)
+          return records
+        end
+      end
+
+      # All other queries are sent back to ActiveRecord
+      find_by_sql_without_caching(*args, &block)
+    end
+
     
     def update_all_with_invalidate(updates, conditions = nil)
       invalidate_from_conditions(conditions, :update) do |conditions|
@@ -101,7 +138,14 @@ module RecordCache
         delete_all_without_invalidate(conditions)
       end
     end
-    
+
+    def delete_with_invalidate(id)
+      raise "Unexpected type for RecordCache delete_with_invalidate id=#{id.inspect}" unless id.is_a? Fixnum
+      invalidate_from_conditions(:id => id) do |conditions|
+        delete_without_invalidate(id)
+      end
+    end
+
     def invalidate_from_conditions(conditions, flag = nil)
       if conditions.nil?
         # Just invalidate all indexes.
@@ -111,8 +155,7 @@ module RecordCache
       end
 
       # Freeze ids to avoid race conditions.
-      sql = "SELECT id FROM #{table_name} "
-      self.send(:add_conditions!, sql, conditions, self.send(:scope, :find))
+      sql = self.select(:id).where(conditions).to_sql
       ids = RecordCache.db(self).select_values(sql)
 
       return if ids.empty?
@@ -212,11 +255,7 @@ module RecordCache
           [:first, :all, :set, :raw, :ids].each do |type|
             next if type == :ids and index.name == 'by_id'
             define_method( index.find_method_name(type) ) do |keys|
-              if self.send(:scope,:find) and self.send(:scope,:find).any?
-                self.method_missing(index.find_method_name(type), keys)
-              else
-                index.find_by_field(keys, self, type)
-              end
+              index.find_by_field(keys, self, type)
             end
           end
         end
@@ -238,6 +277,7 @@ module RecordCache
         end
         
         if index.auto_name?
+
           (field_lookup + index.fields).each do |field|
             next if field == index.index_field
             plural_field = field.pluralize
@@ -259,9 +299,11 @@ module RecordCache
         end
               
         if first_index
-          alias_method_chain :find, :caching
-          alias_method_chain :update_all, :invalidate
-          alias_method_chain :delete_all, :invalidate
+          alias_method_chain :find,         :caching
+          alias_method_chain :find_by_sql,  :caching
+          alias_method_chain :update_all,   :invalidate
+          alias_method_chain :delete_all,   :invalidate
+          alias_method_chain :delete,       :invalidate
         end
       end
       

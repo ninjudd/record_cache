@@ -104,6 +104,8 @@ module RecordCache
     def find_by_field(keys, model_class, type)
       keys = [keys] if not keys.kind_of?(Array)
       keys = stringify(keys)
+
+      
       records_by_key = get_records(keys)
 
       case type
@@ -138,6 +140,7 @@ module RecordCache
       keys = [*keys]
       keys = stringify(keys)
       field = field.to_s if field
+
       records_by_key = get_records(keys)
 
       field_by_index = {}
@@ -171,8 +174,7 @@ module RecordCache
     end
 
     def invalidate_from_conditions_lambda(conditions)
-      sql = "SELECT #{index_field} FROM #{table_name} "
-      model_class.send(:add_conditions!, sql, conditions, model_class.send(:scope, :find))
+      sql = model_class.send(:select, index_field).where(conditions).to_sql
       ids = db.select_values(sql)
       lambda { invalidate(*ids) }
     end
