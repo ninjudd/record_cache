@@ -2,10 +2,9 @@ require 'test/unit'
 require 'rubygems'
 require 'shoulda'
 require 'mocha'
-require 'pp'
 
 $LOAD_PATH.unshift File.dirname(__FILE__) + "/../lib"
-['cache_version', 'model_set', 'memcache', 'deferrable'].each do |dir|
+['deep_clonable', 'ordered_set', 'cache_version', 'model_set', 'memcache', 'deferrable'].each do |dir|
   $LOAD_PATH.unshift File.dirname(__FILE__) + "/../../#{dir}/lib"
 end
 
@@ -22,7 +21,7 @@ CACHE = Memcache.new(:servers => 'localhost')
 ActiveRecord::Base.establish_connection(
   :adapter  => "postgresql",
   :host     => "localhost",
-  :username => `whoami`.chomp,
+  :username => "postgres",
   :password => "",
   :database => "test"
 )
