@@ -142,6 +142,8 @@ module RecordCache
       all_fields = []
       keys.each do |key|
         records = records_by_key[key]
+        next unless records
+
         fields = field ? records.fields(field, model_class) : records.all_fields(model_class, :except => index_field)
         if flag == :all
           all_fields.concat(fields)
@@ -263,9 +265,6 @@ module RecordCache
         cache.get_some(keys, opts) do |keys_to_fetch|
           raise 'db access is disabled' if @@disable_db
           fetched_records = {}
-          keys_to_fetch.each do |key|
-            fetched_records[key] = RecordCache::Set.new(model_class, fields_hash)
-          end
 
           keys_to_fetch.each_slice(MAX_FETCH) do |keys_batch|
             sql = "SELECT #{select_fields} FROM #{table_name} WHERE (#{in_clause(keys_batch)})"
@@ -275,6 +274,7 @@ module RecordCache
 
             db.select_all(sql).each do |record|
               key = record[index_field] || NULL
+              fetched_records[key] ||= RecordCache::Set.new(model_class, fields_hash)
               fetched_records[key] << record
             end
           end
