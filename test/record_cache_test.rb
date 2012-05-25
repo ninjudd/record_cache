@@ -2,7 +2,7 @@ require File.dirname(__FILE__) + '/test_helper.rb'
 
 RecordCache::Set.source_tracking = true
 
-class CreateTables < ActiveRecord::Migration 
+class CreateTables < ActiveRecord::Migration
   def self.up
     down
     create_table :pets do |t|
@@ -64,14 +64,19 @@ class RecordCacheTest < Test::Unit::TestCase
       CreateTables.up
       CacheVersionMigration.up
     end
-    
+
     teardown do
       system('killall memcached')
       CreateTables.down
       CacheVersionMigration.down
       RecordCache::Index.enable_db
     end
-    
+
+    should 'find_by_id with space' do
+      dog = Dog.create(:name => 'Frankie')
+      assert Pet.find_by_id("#{dog.id} ")
+    end
+
     should 'create field lookup functions' do
       dog   = Breed.new(:name => 'pitbull retriever')
       cat   = Breed.new(:name => 'house cat')
@@ -79,16 +84,16 @@ class RecordCacheTest < Test::Unit::TestCase
       daisy = Dog.create(:name => 'Daisy', :breed => dog)
 
       expected = {dog.id => daisy.id, cat.id => willy.id}
-      assert_equal expected, Pet.id_by_breed_id([dog.id, cat.id, 100, 101])      
+      assert_equal expected, Pet.id_by_breed_id([dog.id, cat.id, 100, 101])
     end
-    
+
     should 'return cached values without accessing the database' do
       color = Color.new(:name => 'black & white')
       dog   = Breed.new(:name => 'pitbull retriever')
       cat   = Breed.new(:name => 'house cat')
       daisy = Dog.create(:name => 'Daisy', :color => color, :breed => dog)
       willy = Cat.create(:name => 'Willy', :color => color, :breed => cat)
-      
+
       Pet.find(daisy.id, willy.id)
       Dog.find_all_by_color_id(color.id)
       Dog.find_all_by_breed_id(dog.id)
@@ -121,7 +126,7 @@ class RecordCacheTest < Test::Unit::TestCase
       breed2 = Breed.new(:name => 'pitbull terrier')
       daisy = Dog.create(:name => 'Daisy', :color => color1, :breed => breed1)
       sammy = Dog.create(:name => 'Sammy', :color => color1, :breed => breed2)
-      
+
       Dog.find(daisy.id, sammy.id)
       Dog.find_all_by_color_id(color1.id)
       Dog.find_all_by_breed_id([breed1.id, breed2.id])
@@ -152,7 +157,7 @@ class RecordCacheTest < Test::Unit::TestCase
     should 'create raw find methods' do
       daisy = Dog.create(:name => 'Daisy')
       sammy = Dog.create(:name => 'Sammy')
-      
+
       Dog.find(daisy.id, sammy.id)
       RecordCache::Index.disable_db
 
@@ -166,7 +171,7 @@ class RecordCacheTest < Test::Unit::TestCase
       breed2 = Breed.new(:name => 'pitbull terrier')
       daisy = Dog.create(:name => 'Daisy', :color => color, :breed => breed1, :sex => 'f')
       sammy = Dog.create(:name => 'Sammy', :color => color, :breed => breed2, :sex => 'm')
-      
+
       assert_equal [sammy],        Dog.find_all_male_by_color_id(color.id)
       assert_equal [daisy],        Dog.find_all_female_by_color_id(color.id)
       assert_equal [daisy, sammy], Dog.find_all_colors(color.id)
@@ -184,22 +189,22 @@ class RecordCacheTest < Test::Unit::TestCase
       end
       assert_equal 6, count
     end
-    
+
     should 'invalidate indexes on save' do
       b_w   = Color.new(:name => 'black & white')
       brown = Color.new(:name => 'brown')
       breed = Breed.new(:name => 'mutt')
       daisy = Dog.create(:name => 'Daisy', :color => b_w, :breed => breed, :sex => 'f')
-      
+
       assert_equal daisy, Dog.find_by_color_id(b_w.id)
-      
+
       daisy.name  = 'Molly'
       daisy.color = brown
       daisy.save
-      
+
       assert_equal 'Molly', daisy.name
       assert_equal brown.id, daisy.color_id
-      
+
       assert_equal daisy, Dog.find_by_color_id(brown.id)
       assert_equal nil,   Dog.find_by_color_id(b_w.id)
     end

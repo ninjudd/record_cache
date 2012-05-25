@@ -275,7 +275,6 @@ module RecordCache
 
             db.select_all(sql).each do |record|
               key = record[index_field] || NULL
-              fetched_records[key] ||= RecordCache::Set.new(model_class, fields_hash)
               fetched_records[key] << record
             end
           end
@@ -294,8 +293,7 @@ module RecordCache
       conditions << "#{index_field} IS NULL" if keys.delete(NULL)
 
       if keys.any?
-        values = keys.collect {|value| quote_index_value(value)}.join(',')
-        conditions << "#{index_field} IN (#{values})"
+        conditions << "#{index_field} IN (#{keys.join(',')})"
       end
       conditions.join(' OR ')
     end
@@ -379,7 +377,7 @@ module RecordCache
 
     def stringify(keys)
       keys.compact! if disallow_null?
-      keys.collect {|key| key.nil? ? NULL : key.to_s}.uniq
+      keys.collect {|key| key.nil? ? NULL : quote_index_value(key)}.uniq
     end
 
     def db
