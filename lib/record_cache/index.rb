@@ -293,7 +293,8 @@ module RecordCache
       conditions << "#{index_field} IS NULL" if keys.delete(NULL)
 
       if keys.any?
-        conditions << "#{index_field} IN (#{keys.join(',')})"
+        values = keys.collect {|value| quote_index_value(value)}.join(',')
+        conditions << "#{index_field} IN (#{values})"
       end
       conditions.join(' OR ')
     end
@@ -377,7 +378,10 @@ module RecordCache
 
     def stringify(keys)
       keys.compact! if disallow_null?
-      keys.collect {|key| key.nil? ? NULL : quote_index_value(key)}.uniq
+      keys.collect do |key|
+        key = key.nil? ? NULL : key.to_s
+        key = key.strip if index_column.number?
+      end.uniq
     end
 
     def db
