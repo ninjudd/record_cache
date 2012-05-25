@@ -380,7 +380,7 @@ module RecordCache
       keys.compact! if disallow_null?
       keys.collect do |key|
         key = key.nil? ? NULL : key.to_s
-        key = key.strip if index_column.number?
+        index_column.number? ? key.strip : key
       end.uniq
     end
 
