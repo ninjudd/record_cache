@@ -278,7 +278,7 @@ module RecordCache
               if fetched_records[key]
                 fetched_records[key] << record
               else
-                raise "no records found for #{key.inspect}. existing keys: #{fetched_records.keys.inspect}"
+                raise "no records found for #{key.inspect}. existing keys: #{fetched_records.keys.inspect}\n#{sql}"
               end
             end
           end
