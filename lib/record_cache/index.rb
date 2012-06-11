@@ -274,8 +274,12 @@ module RecordCache
             sql << " LIMIT #{limit}"          if limit
 
             db.select_all(sql).each do |record|
-              key = record[index_field] || NULL
-              fetched_records[key] << record
+              key = record[index_field] || NULL              
+              if fetched_records[key]
+                fetched_records[key] << record
+              else
+                raise "no records found for #{key.inspect}. existing keys: #{fetched_records.keys.inspect}"
+              end
             end
           end
           fetched_records
