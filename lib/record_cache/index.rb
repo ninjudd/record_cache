@@ -26,6 +26,10 @@ module RecordCache
       @scope_query   = opts[:scope] || {}
     end
 
+    def to_s
+      "<RecordCache::Index #{@model_class} by #{@index_field} (#{@name})>"
+    end
+
     def cache
       if RecordCache.config[:thread_safe]
         Thread.current[:record_cache] ||= @cache.clone
@@ -274,11 +278,11 @@ module RecordCache
             sql << " LIMIT #{limit}"          if limit
 
             db.select_all(sql).each do |record|
-              key = record[index_field] || NULL              
+              key = record[index_field] || NULL
               if fetched_records[key]
                 fetched_records[key] << record
               else
-                raise "no records found for #{key.inspect}. existing keys: #{fetched_records.keys.inspect}\n#{sql}"
+                raise "no records found in #{self} for #{key.inspect}. existing keys: #{fetched_records.keys.inspect}"
               end
             end
           end
