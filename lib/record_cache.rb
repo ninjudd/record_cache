@@ -1,6 +1,7 @@
 require 'rubygems'
 require 'memcache'
 require 'active_record'
+require 'ordered_set'
 require 'cache_version'
 require 'deferrable'
 
@@ -17,13 +18,18 @@ module RecordCache
       @config ||= {}
     end
   end
-
+  def self.with_config(opts)
+    old, @config = @config, @config.merge(opts)
+    yield
+  ensure
+    @config = old
+  end
+ 
+ 
   def self.db(model_class)
-    db = model_class.connection
-
     # Always use the master connection since we are caching.
-    @has_data_fabric ||= defined?(DataFabric::ConnectionProxy)
-    if @has_data_fabric and db.kind_of?(DataFabric::ConnectionProxy)
+    db = model_class.connection
+    if false && defined?(DataFabric::ConnectionProxy) and db.kind_of?(DataFabric::ConnectionProxy)
       model_class.record_cache_config[:use_slave] ? db.send(:connection) : db.send(:master)
     else
       db
@@ -33,12 +39,13 @@ module RecordCache
   module InstanceMethods
     def invalidate_record_cache
       self.class.each_cached_index do |index|
-        index.invalidate_model(self)
+        index.invalidate_model(self) 
         index.clear_deferred
       end
     end
 
     def invalidate_record_cache_deferred
+      return unless (self.changed? || self.destroyed?)
       self.class.each_cached_index do |index|
         # Have to invalidate both before and after commit.
         index.invalidate_model(self)
@@ -53,41 +60,26 @@ module RecordCache
 
     def attr_was(attr)
       attr = attr.to_s
-      if ['id', 'type'].include?(attr) or not attribute_changed?(attr)
-        read_attribute(attr)
-      else
-        changed_attributes[attr]
-      end
+      ['id', 'type'].include?(attr) ? send(attr) : send(:attribute_was, attr)
     end
   end
-
-  module ClassMethods
+    
+  module ClassMethods    
     def find_with_caching(*args, &block)
       if args.last.is_a?(Hash)
         args.last.delete_if {|k,v| v.nil?}
         args.pop if args.last.empty?
       end
-
+      
       if [:all, :first, :last].include?(args.first)
         opts = args.last
         if opts.is_a?(Hash) and opts.keys == [:conditions]
           # Try to match the SQL.
-          if opts[:conditions].kind_of?(Hash)
-            field = nil
-            value = nil
-            if opts[:conditions].keys.size == 1
-              opts[:conditions].each {|f,v| field, value = f,v}
-            end
-          elsif opts[:conditions] =~ /^(?:"?#{table_name}"?\.)?"?(\w+)"? = (?:(\d+)|'(\w+)')$/i
-            field, value = $1, ($3 || $2)
-          elsif opts[:conditions] =~ /^(?:"?#{table_name}"?\.)?"?(\w+)"? IN \(([\d,]*)\)$/i
-            field, value = $1, $2
-            value = value.split(',')
-          end
-
-          if field and value
+          if opts[:conditions] =~ /^"?#{table_name}"?."?(\w+)"? = (?:(\d+)|'(\w+)')$/
+            field = $1
+            value = ($3 || $2)
             index = cached_index("by_#{field}")
-            return index.find_by_field([value].flatten, self, args.first) if index
+            return index.find_by_field([value], self, args.first) if index
           end
         end
       elsif not args.last.is_a?(Hash)
@@ -99,6 +91,43 @@ module RecordCache
       find_without_caching(*args, &block)
     end
 
+    # Match sql with regex, locate the index and query cache/db
+    def match_and_find_by_field(sql, regex, type)
+      match_data = regex.match(sql)
+      if match_data
+          field = match_data[1]
+          value = (match_data[3] || match_data[2])
+          index = cached_index("by_#{field}")
+          if index
+            records = index.find_by_field([value], self, type)
+            # we must return an array
+            if records.is_a?(Array)
+              return records
+            end
+            return records ? [records]  : []
+          end
+      end
+    end
+    private :match_and_find_by_field
+
+    # ActiveRecord ends up making a call to find_by_sql in the case of associations
+    # for example in a call to Company.first.employees
+    def find_by_sql_with_caching(*args, &block)
+      if args.is_a?(Array) and args.size==1
+        regex_nolimit   = /^SELECT\s+\S+\.\*\s+FROM\s+\S+\s+WHERE\s+\(?"?#{table_name}"?."?(\w+)"?\s+=\s+(?:(\d+)|'([^']+)')\)?$/
+        regex_withlimit = /^SELECT\s+\S+\.\*\s+FROM\s+\S+\s+WHERE\s+\(?"?#{table_name}"?."?(\w+)"?\s+=\s+(?:(\d+)|'([^']+)')\)?\s+LIMIT\s+1$/
+        if records = match_and_find_by_field(args.first, regex_nolimit, :all)
+          return records
+        elsif records = match_and_find_by_field(args.first, regex_withlimit, :first)
+          return records
+        end
+      end
+
+      # All other queries are sent back to ActiveRecord
+      find_by_sql_without_caching(*args, &block)
+    end
+
+    
     def update_all_with_invalidate(updates, conditions = nil)
       invalidate_from_conditions(conditions, :update) do |conditions|
         update_all_without_invalidate(updates, conditions)
@@ -111,6 +140,21 @@ module RecordCache
       end
     end
 
+    def delete_with_invalidate(arg)
+      if arg.is_a? Fixnum
+        condition = { :id => arg }
+      elsif arg.is_a? ActiveRecord::Base
+        condition = { :id => arg.id }
+      elsif arg.is_a? Array
+        condition = { :id => arg.map(&:id) }
+      else
+        raise "Unexpected type for RecordCache delete_with_invalidate arg=#{arg.inspect}"
+      end
+      invalidate_from_conditions(condition) do |cond|
+        delete_without_invalidate(arg)
+      end
+    end
+
     def invalidate_from_conditions(conditions, flag = nil)
       if conditions.nil?
         # Just invalidate all indexes.
@@ -120,8 +164,7 @@ module RecordCache
       end
 
       # Freeze ids to avoid race conditions.
-      sql = "SELECT id FROM #{table_name} "
-      self.send(:add_conditions!, sql, conditions, self.send(:scope, :find))
+      sql = self.select(:id).where(conditions).to_sql
       ids = RecordCache.db(self).select_values(sql)
 
       return if ids.empty?
@@ -137,9 +180,9 @@ module RecordCache
         result = yield(conditions)
 
         # Finish invalidating with prior attributes.
-        lambdas.each {|l| l.call}
+        lambdas.each {|l| l.call}      
       end
-
+    
       # Invalidate again afterwards if we are updating (or for the first time if no block was given).
       if flag == :update or not block_given?
         each_cached_index do |index|
@@ -175,7 +218,7 @@ module RecordCache
     def each_cached_index
       cached_index_names.each do |index_name|
         yield cached_index(index_name)
-      end
+      end      
     end
 
     def cached_index_names
@@ -185,11 +228,16 @@ module RecordCache
     end
 
     def record_cache_config(opts = nil)
-      if opts
-        record_cache_config.merge!(opts)
-      else
-        @record_cache_config ||= RecordCache.config.clone
-      end
+      @record_cache_config ||= {}
+      @record_cache_config.merge!(opts) if opts
+      RecordCache.config.merge(@record_cache_config)
+    end
+    
+    def with_record_cache_config(opts)
+       old, @record_cache_config = @record_cache_config, @record_cache_config.merge(opts)
+       yield
+    ensure
+       @record_cache_config = old
     end
   end
 
@@ -216,11 +264,7 @@ module RecordCache
           [:first, :all, :set, :raw, :ids].each do |type|
             next if type == :ids and index.name == 'by_id'
             define_method( index.find_method_name(type) ) do |keys|
-              if self.send(:scope,:find) and self.send(:scope,:find).any?
-                self.method_missing(index.find_method_name(type), keys)
-              else
-                index.find_by_field(keys, self, type)
-              end
+              index.find_by_field(keys, self, type)
             end
           end
         end
@@ -231,7 +275,7 @@ module RecordCache
           define_method( "all_#{index.name.pluralize}_by_#{index.index_field}" ) do |keys|
             index.field_lookup(keys, self, field, :all)
           end
-
+          
           define_method( "#{index.name.pluralize}_by_#{index.index_field}" ) do |keys|
             index.field_lookup(keys, self, field)
           end
@@ -240,8 +284,9 @@ module RecordCache
             index.field_lookup(keys, self, field, :first)
           end
         end
-
+        
         if index.auto_name?
+
           (field_lookup + index.fields).each do |field|
             next if field == index.index_field
             plural_field = field.pluralize
@@ -255,20 +300,22 @@ module RecordCache
             define_method( "#{prefix}#{plural_field}_by_#{index.index_field}"  ) do |keys|
               index.field_lookup(keys, self, field)
             end
-
+            
             define_method( "#{prefix}#{field}_by_#{index.index_field}"  ) do |keys|
               index.field_lookup(keys, self, field, :first)
             end
           end
         end
-
+              
         if first_index
-          alias_method_chain :find, :caching
-          alias_method_chain :update_all, :invalidate
-          alias_method_chain :delete_all, :invalidate
+          alias_method_chain :find,         :caching
+          alias_method_chain :find_by_sql,  :caching
+          alias_method_chain :update_all,   :invalidate
+          alias_method_chain :delete_all,   :invalidate
+          alias_method_chain :delete,       :invalidate
         end
       end
-
+      
       if first_index
         after_save     :invalidate_record_cache_deferred
         after_destroy  :invalidate_record_cache_deferred
@@ -280,11 +327,3 @@ module RecordCache
 end
 
 ActiveRecord::Base.send(:extend,  RecordCache::ActiveRecordExtension)
-
-unless defined?(PGconn) and PGconn.respond_to?(:quote_ident)
-  class PGconn
-    def self.quote_ident(name)
-      %("#{name}")
-    end
-  end
-end

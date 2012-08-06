@@ -3,16 +3,16 @@ module RecordCache
     include Deferrable
 
     attr_reader :model_class, :index_field, :fields, :order_by, :limit, :expiry, :name, :prefix
-
+    
     NULL = 'NULL'
-
+    
     def initialize(opts)
       raise ':by => index_field required for cache'       if opts[:by].nil?
       raise 'explicit name or prefix required with scope' if opts[:scope] and opts[:name].nil? and opts[:prefix].nil?
 
-      @auto_name     = opts[:name].nil?
+      @auto_name     = opts[:name].nil?      
       @write_ahead   = opts[:write_ahead]
-      @cache         = opts[:cache].kind_of?(Symbol) ? Memcache.pool[opts[:cache]] : (opts[:cache] || CACHE)
+      @cache         = opts[:cache] || CACHE
       @expiry        = opts[:expiry]
       @model_class   = opts[:class]
       @set_class     = opts[:set_class] || "#{@model_class}Set"
@@ -22,7 +22,8 @@ module RecordCache
       @name          = ( opts[:name] || [prefix, 'by', index_field].compact.join('_') ).to_s
       @order_by      = opts[:order_by]
       @limit         = opts[:limit]
-      @disallow_null = opts[:null] == false
+      @disallow_null = opts[:null] == false || (opts[:null].nil? and opts[:by] == :id)
+
       @scope_query   = opts[:scope] || {}
     end
 
@@ -32,7 +33,8 @@ module RecordCache
 
     def cache
       if RecordCache.config[:thread_safe]
-        Thread.current[:record_cache] ||= @cache.clone
+        cachee = Thread.current[:record_cache] ||= @cache.clone
+        cachee
       else
         @cache
       end
@@ -45,7 +47,7 @@ module RecordCache
     def full_record?
       fields.empty?
     end
-
+    
     def includes_id?
       full_record? or fields.include?('id')
     end
@@ -55,20 +57,40 @@ module RecordCache
     end
 
     def namespace
-      "#{model_class.name}_#{model_class.version}_#{RecordCache.version}:#{name}" << ( full_record? ? '' : ":#{fields.join(',')}" )
+      @namespace ||= "#{model_class.name}_#{model_class.version}_#{RecordCache.version}:#{name}" << ( full_record? ? '' : ":#{fields.join(',')}" )
+    end
+    
+    def fields_array
+      if @fields_array.nil?
+        if full_record?
+          @fields_array ||= model_class.column_names
+        else
+          @fields_array ||= fields.collect {|field| field.to_s}
+        end
+      end
+      @fields_array
+    end
+
+    def sorted_fields_array
+      if @sorted_fields_array.nil?
+        @sorted_fields_array = fields_array.sort
+      end
+      @sorted_fields_array
     end
 
     def fields_hash
       if @fields_hash.nil?
-        if full_record?
-          @fields_hash ||= model_class.column_names.sort.hash
-        else
-          @fields_hash ||= fields.collect {|field| field.to_s}.hash
-        end
+        @fields_hash = Zlib.crc32(fields_array.sort.join(','))
       end
       @fields_hash
     end
 
+    def ruby_fields_hash
+      if @ruby_fields_hash.nil?
+        @ruby_fields_hash = fields_array.hash
+      end
+      @ruby_fields_hash
+    end
     def find_by_ids(ids, model_class)
       expects_array = ids.first.kind_of?(Array)
       ids = ids.flatten.compact.collect {|id| id.to_i}
@@ -78,9 +100,9 @@ module RecordCache
         return [] if expects_array
         raise ActiveRecord::RecordNotFound, "Couldn't find #{model_class} without an ID"
       end
-
+      
       records_by_id = get_records(ids)
-
+   
       models = ids.collect do |id|
         records = records_by_id[id]
         model   = records.instantiate_first(model_class, full_record?) if records
@@ -95,17 +117,19 @@ module RecordCache
         raise ActiveRecord::RecordNotFound, "Couldn't find #{model_class} with ID #{id}" unless model
         model
       end
-
+      
       if models.size == 1 and not expects_array
         models.first
-      else
+      else 
         models
       end
     end
-
+    
     def find_by_field(keys, model_class, type)
       keys = [keys] if not keys.kind_of?(Array)
       keys = stringify(keys)
+
+      
       records_by_key = get_records(keys)
 
       case type
@@ -135,15 +159,16 @@ module RecordCache
         raw_records
       end
     end
-
+    
     def field_lookup(keys, model_class, field, flag = nil)
       keys = [*keys]
       keys = stringify(keys)
       field = field.to_s if field
+
       records_by_key = get_records(keys)
 
       field_by_index = {}
-      all_fields = []
+      all_fields = [].to_ordered_set
       keys.each do |key|
         records = records_by_key[key]
         fields = field ? records.fields(field, model_class) : records.all_fields(model_class, :except => index_field)
@@ -157,15 +182,13 @@ module RecordCache
         end
       end
       if flag == :all
-        all_fields.uniq
+        all_fields.to_a
       else
         field_by_index
       end
     end
-
+    
     def invalidate(*keys)
-      return if model_class.record_cache_config[:disable_write]
-
       keys = stringify(keys)
       cache.in_namespace(namespace) do
         keys.each do |key|
@@ -175,8 +198,7 @@ module RecordCache
     end
 
     def invalidate_from_conditions_lambda(conditions)
-      sql = "SELECT #{index_field} FROM #{table_name} "
-      model_class.send(:add_conditions!, sql, conditions, model_class.send(:scope, :find))
+      sql = model_class.send(:select, index_field).where(conditions).to_sql
       ids = db.select_values(sql)
       lambda { invalidate(*ids) }
     end
@@ -184,9 +206,9 @@ module RecordCache
     def invalidate_from_conditions(conditions)
       invalidate_from_conditions_lambda(conditions).call
     end
-
+    
     def invalidate_model(model)
-      attribute     = model.read_attribute(index_field)
+      attribute     = model.send(index_field)
       attribute_was = model.attr_was(index_field)
       if scope.match_previous?(model)
         if write_ahead?
@@ -208,7 +230,7 @@ module RecordCache
         end
       end
     end
-
+        
     def scope_query
       @scope_query[:type] ||= model_class.to_s if sub_class?
       @scope_query
@@ -226,7 +248,7 @@ module RecordCache
     def self.enable_db
       @@disable_db = false
     end
-
+       
     def find_method_name(type)
       if name =~ /(^|_)by_/
         if type == :first
@@ -245,7 +267,7 @@ module RecordCache
         end
       end
     end
-
+    
     def cached_set(id)
       # Used for debugging. Gives you the RecordCache::Set that is currently in the cache.
       id = stringify([id]).first
@@ -256,13 +278,34 @@ module RecordCache
 
   private
 
+    def columns_in_cache(record_set)
+      excluded_columns = []
+      unless(full_record?)
+        # The polymorphism related "type" column should be excluded from the comparison
+        excluded_columns << "type"
+        excluded_columns << index_field unless index_field == "id"
+      end
+      cc =  record_set.record_columns(excluded_columns)
+      return true if cc == []
+      return true if cc == sorted_fields_array
+      return false
+    end
     MAX_FETCH = 1000
     def get_records(keys)
       cache.in_namespace(namespace) do
-        opts = {
+        opts = { 
           :expiry        => expiry,
-          :disable_write => model_class.record_cache_config[:disable_write],
-          :validation    => lambda {|key, record_set| record_set and record_set.fields_hash == fields_hash},
+          :disable_write => RecordCache.config[:disable_write],
+          :validation    => lambda {|key, record_set|
+            if record_set && record_set.is_a?(RecordCache::Set)
+              # The regular "fast" test + fallback to slow test
+              # until cache is entirely recycled (WEB-8391)
+              return true if record_set.fields_hash == fields_hash
+              return true if record_set.fields_hash == ruby_fields_hash
+              return true if columns_in_cache(record_set)==true
+            end
+            return false
+          }
         }
         cache.get_some(keys, opts) do |keys_to_fetch|
           raise 'db access is disabled' if @@disable_db
@@ -308,11 +351,9 @@ module RecordCache
     end
 
     def remove_from_cache(model)
-      return if model_class.record_cache_config[:disable_write]
-
       record = model.attributes
-      key    = model.attr_was(index_field) || NULL
-
+      key    = model.attr_was(index_field)
+      
       now_and_later do
         cache.in_namespace(namespace) do
           cache.with_lock(key) do
@@ -326,12 +367,12 @@ module RecordCache
     end
 
     def add_to_cache(model)
-      return if model_class.record_cache_config[:disable_write]
+      return if RecordCache.config[:disable_write]
 
       record = model_to_record(model)
       return unless record
-      key = record[index_field] || NULL
-
+      key = record[index_field].to_s
+      
       now_and_later do
         cache.in_namespace(namespace) do
           cache.with_lock(key) do
@@ -359,11 +400,11 @@ module RecordCache
       end
       @select_fields
     end
-
+    
     def base_class?
       @base_class ||= single_table_inheritance? and model_class == model_class.base_class
     end
-
+    
     def sub_class?
       @sub_class ||= single_table_inheritance? and model_class != model_class.base_class
     end
@@ -375,15 +416,15 @@ module RecordCache
     def quote_index_value(value)
       model_class.quote_value(value, index_column)
     end
-
+    
     def index_column
       @index_column ||= model_class.columns_hash[index_field]
     end
-
+        
     def table_name
       model_class.table_name
     end
-
+        
     def stringify(keys)
       keys.compact! if disallow_null?
       keys.collect do |key|
@@ -391,7 +432,7 @@ module RecordCache
         index_column.number? ? key.strip : key
       end.uniq
     end
-
+    
     def db
       RecordCache.db(model_class)
     end

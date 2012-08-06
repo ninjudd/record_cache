@@ -55,7 +55,7 @@ module RecordCache
       record_type  = record['type']
       record['id'] = record['id'].to_i if record.has_key?('id')
       
-      [record_type, model_class.to_s].uniq.each do |type|
+      [record_type, model_class.to_s].compact.uniq.each do |type|
         records_by_type(type) << record
       end
     end
@@ -106,6 +106,11 @@ module RecordCache
       end
     end
 
+    def record_columns(excluded_columns)
+      first_record = records(self.model_class.to_s).first
+      return [] unless first_record
+      (first_record.keys-excluded_columns).sort
+    end
     def instantiate_first(type = model_class, full_record = false)
       if full_record
         record = records(type).first

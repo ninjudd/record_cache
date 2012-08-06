@@ -11,13 +11,7 @@ begin
     s.homepage = "http://github.com/ninjudd/record_cache"
     s.description = "Active Record caching and indexing in memcache"
     s.authors = ["Justin Balthrop"]
-    s.add_dependency('after_commit', '>= 1.0.0')
-    s.add_dependency('deferrable', '>= 0.1.0')
-    s.add_dependency('memcache', '>= 1.0.0')
-    s.add_dependency('cache_version', '>= 0.9.4')
-    s.add_dependency('activerecord', '>= 2.0.0')
   end
-  Jeweler::GemcutterTasks.new
 rescue LoadError
   puts "Jeweler not available. Install it with: sudo gem install technicalpickles-jeweler -s http://gems.github.com"
 end
