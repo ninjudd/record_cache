@@ -53,20 +53,40 @@ module RecordCache
     end
 
     def namespace
-      "#{model_class.name}_#{model_class.version}_#{RecordCache.version}:#{name}" << ( full_record? ? '' : ":#{fields.join(',')}" )
+      @namespace ||= "#{model_class.name}_#{model_class.version}_#{RecordCache.version}:#{name}" << ( full_record? ? '' : ":#{fields.join(',')}" )
     end
     
+    def fields_array
+      if @fields_array.nil?
+        if full_record?
+          @fields_array ||= model_class.column_names
+        else
+          @fields_array ||= fields.collect {|field| field.to_s}
+        end
+      end
+      @fields_array
+    end
+
+    def sorted_fields_array
+      if @sorted_fields_array.nil?
+        @sorted_fields_array = fields_array.sort
+      end
+      @sorted_fields_array
+    end
+
     def fields_hash
       if @fields_hash.nil?
-        if full_record?
-          @fields_hash ||= model_class.column_names.hash
-        else
-          @fields_hash ||= fields.collect {|field| field.to_s}.hash
-        end
+        @fields_hash = Zlib.crc32(fields_array.sort.join(','))
       end
       @fields_hash
     end
 
+    def ruby_fields_hash
+      if @ruby_fields_hash.nil?
+        @ruby_fields_hash = fields_array.hash
+      end
+      @ruby_fields_hash
+    end
     def find_by_ids(ids, model_class)
       expects_array = ids.first.kind_of?(Array)
       ids = ids.flatten.compact.collect {|id| id.to_i}
@@ -254,13 +274,34 @@ module RecordCache
 
   private
 
+    def columns_in_cache(record_set)
+      excluded_columns = []
+      unless(full_record?)
+        # The polymorphism related "type" column should be excluded from the comparison
+        excluded_columns << "type"
+        excluded_columns << index_field unless index_field == "id"
+      end
+      cc =  record_set.record_columns(excluded_columns)
+      return true if cc == []
+      return true if cc == sorted_fields_array
+      return false
+    end
     MAX_FETCH = 1000
     def get_records(keys)
       cache.in_namespace(namespace) do
         opts = { 
           :expiry        => expiry,
           :disable_write => RecordCache.config[:disable_write],
-          :validation    => lambda {|key, record_set| record_set && record_set.is_a?(RecordCache::Set) && record_set.fields_hash == fields_hash },
+          :validation    => lambda {|key, record_set|
+            if record_set && record_set.is_a?(RecordCache::Set)
+              # The regular "fast" test + fallback to slow test
+              # until cache is entirely recycled (WEB-8391)
+              return true if record_set.fields_hash == fields_hash
+              return true if record_set.fields_hash == ruby_fields_hash
+              return true if columns_in_cache(record_set)==true
+            end
+            return false
+          }
         }
         cache.get_some(keys, opts) do |keys_to_fetch|
           raise 'db access is disabled' if @@disable_db

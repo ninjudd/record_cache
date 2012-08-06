@@ -106,6 +106,11 @@ module RecordCache
       end
     end
 
+    def record_columns(excluded_columns)
+      first_record = records(self.model_class.to_s).first
+      return [] unless first_record
+      (first_record.keys-excluded_columns).sort
+    end
     def instantiate_first(type = model_class, full_record = false)
       if full_record
         record = records(type).first
