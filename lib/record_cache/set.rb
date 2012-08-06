@@ -55,7 +55,7 @@ module RecordCache
       record_type  = record['type']
       record['id'] = record['id'].to_i if record.has_key?('id')
       
-      [record_type, model_class.to_s].uniq.each do |type|
+      [record_type, model_class.to_s].compact.uniq.each do |type|
         records_by_type(type) << record
       end
     end
