@@ -1,6 +1,6 @@
 require 'rake'
 require 'rake/testtask'
-require 'rdoc/task'
+require 'rake/rdoctask'
 
 begin
   require 'jeweler'
@@ -8,9 +8,9 @@ begin
     s.name = "record_cache"
     s.summary = %Q{Active Record caching and indexing in memcache. An alternative to cache_fu}
     s.email = "code@justinbalthrop.com"
-    s.homepage = "http://github.com/yammer/record_cache"
+    s.homepage = "http://github.com/ninjudd/record_cache"
     s.description = "Active Record caching and indexing in memcache"
-    s.authors = ["Justin Balthrop", "Matt Knopp", "Philippe Le Rohellec"]
+    s.authors = ["Justin Balthrop"]
   end
 rescue LoadError
   puts "Jeweler not available. Install it with: sudo gem install technicalpickles-jeweler -s http://gems.github.com"

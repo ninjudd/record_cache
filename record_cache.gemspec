@@ -5,11 +5,11 @@
 
 Gem::Specification.new do |s|
   s.name = %q{record_cache}
-  s.version = "3.0.0"
+  s.version = "0.9.6"
 
   s.required_rubygems_version = Gem::Requirement.new(">= 0") if s.respond_to? :required_rubygems_version=
-  s.authors = ["Justin Balthrop", "Matt Knopp", "Philippe Le Rohellec"]
-  s.date = %q{2011-12-09}
+  s.authors = ["Justin Balthrop"]
+  s.date = %q{2009-11-17}
   s.description = %q{Active Record caching and indexing in memcache}
   s.email = %q{code@justinbalthrop.com}
   s.extra_rdoc_files = [
@@ -20,7 +20,6 @@ Gem::Specification.new do |s|
     "LICENSE",
     "README.rdoc",
     "Rakefile",
-    "VERSION",
     "VERSION.yml",
     "lib/record_cache.rb",
     "lib/record_cache/index.rb",
@@ -30,15 +29,21 @@ Gem::Specification.new do |s|
     "test/record_cache_test.rb",
     "test/test_helper.rb"
   ]
-  s.homepage = %q{http://github.com/yammer/record_cache}
+  s.homepage = %q{http://github.com/ninjudd/record_cache}
+  s.rdoc_options = ["--charset=UTF-8"]
   s.require_paths = ["lib"]
-  s.rubygems_version = %q{1.5.3}
+  s.rubygems_version = %q{1.3.5}
   s.summary = %q{Active Record caching and indexing in memcache. An alternative to cache_fu}
+  s.test_files = [
+    "test/record_cache_test.rb",
+     "test/test_helper.rb"
+  ]
 
   if s.respond_to? :specification_version then
+    current_version = Gem::Specification::CURRENT_SPECIFICATION_VERSION
     s.specification_version = 3
 
-    if Gem::Version.new(Gem::VERSION) >= Gem::Version.new('1.2.0') then
+    if Gem::Version.new(Gem::RubyGemsVersion) >= Gem::Version.new('1.2.0') then
     else
     end
   else
