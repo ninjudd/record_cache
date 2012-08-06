@@ -45,6 +45,7 @@ module RecordCache
     end
 
     def invalidate_record_cache_deferred
+      return unless (self.changed? || self.destroyed?)
       self.class.each_cached_index do |index|
         # Have to invalidate both before and after commit.
         index.invalidate_model(self)
@@ -113,8 +114,8 @@ module RecordCache
     # for example in a call to Company.first.employees
     def find_by_sql_with_caching(*args, &block)
       if args.is_a?(Array) and args.size==1
-        regex_nolimit   = /^SELECT\s+\S+\.\*\s+FROM\s+\S+\s+WHERE\s+\("?#{table_name}"?."?(\w+)"?\s+=\s+(?:(\d+)|'(\w+)')\)$/
-        regex_withlimit = /^SELECT\s+\S+\.\*\s+FROM\s+\S+\s+WHERE\s+\("?#{table_name}"?."?(\w+)"?\s+=\s+(?:(\d+)|'(\w+)')\)\s+LIMIT\s+1$/
+        regex_nolimit   = /^SELECT\s+\S+\.\*\s+FROM\s+\S+\s+WHERE\s+\(?"?#{table_name}"?."?(\w+)"?\s+=\s+(?:(\d+)|'([^']+)')\)?$/
+        regex_withlimit = /^SELECT\s+\S+\.\*\s+FROM\s+\S+\s+WHERE\s+\(?"?#{table_name}"?."?(\w+)"?\s+=\s+(?:(\d+)|'([^']+)')\)?\s+LIMIT\s+1$/
         if records = match_and_find_by_field(args.first, regex_nolimit, :all)
           return records
         elsif records = match_and_find_by_field(args.first, regex_withlimit, :first)
@@ -139,10 +140,18 @@ module RecordCache
       end
     end
 
-    def delete_with_invalidate(id)
-      raise "Unexpected type for RecordCache delete_with_invalidate id=#{id.inspect}" unless id.is_a? Fixnum
-      invalidate_from_conditions(:id => id) do |conditions|
-        delete_without_invalidate(id)
+    def delete_with_invalidate(arg)
+      if arg.is_a? Fixnum
+        condition = { :id => arg }
+      elsif arg.is_a? ActiveRecord::Base
+        condition = { :id => arg.id }
+      elsif arg.is_a? Array
+        condition = { :id => arg.map(&:id) }
+      else
+        raise "Unexpected type for RecordCache delete_with_invalidate arg=#{arg.inspect}"
+      end
+      invalidate_from_conditions(condition) do |cond|
+        delete_without_invalidate(arg)
       end
     end
 
