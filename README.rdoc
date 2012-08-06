@@ -6,32 +6,29 @@ reduce your database load.
 
 == Usage:
 
-  require 'record_cache'
-
-  class User < ActiveRecord
+  class Foo < ActiveRecord
     record_cache :by => :id
-    record_cache :id, :by => :username
+    record_cache :id, :by => :owner_id
   end
 
   # These will use the cache now.
-  User.find(1)
-  User.find_by_id(2)
-  User.find_all_by_username('chuck')
+  Foo.find(1)
+  Foo.find_by_id(2)
+  Foo.find_all_by_owner_id(3)
 
-Invalidation is handled for you using callbacks. Be careful though if you modify records
-directly using SQL. Both update_all and delete_all handle invalidations for you, but other
-direct SQL will not.
+Invalidation is handled for you using callbacks.
 
 == Install:
 
-  gem install record_cache
+First, install the after_commit plugin from: http://github.com/ninjudd/after_commit
 
-== Dependencies:
+Then install the following gems:
 
-* {after_commit}[http://github.com/freelancing-god/after_commit]
-* {memcache}[http://github.com/ninjudd/memcache]
-
-RecordCache is confirmed to work with Rails 2.3.9. It does not currently work with Rails 3.
+  sudo gem install ninjudd-deferrable -s http://gems.github.com
+  sudo gem install ninjudd-ordered_set -s http://gems.github.com
+  sudo gem install ninjudd-memcache -s http://gems.github.com
+  sudo gem install ninjudd-cache_version -s http://gems.github.com
+  sudo gem install ninjudd-record_cache -s http://gems.github.com
 
 == License:
 
