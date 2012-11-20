@@ -120,12 +120,13 @@ module RecordCache
       end
 
       # Freeze ids to avoid race conditions.
-      sql = "SELECT id FROM #{table_name} "
+      sql = "SELECT #{connection.quote_column_name(primary_key)} FROM #{table_name} "
       self.send(:add_conditions!, sql, conditions, self.send(:scope, :find))
       ids = RecordCache.db(self).select_values(sql)
 
       return if ids.empty?
-      conditions = "id IN (#{ids.join(',')})"
+      primary_col = columns_hash[primary_key]
+      conditions = "#{connection.quote_column_name(primary_key)} IN (#{ids.collect {|id| quote_value(id, primary_col)}.join(',')})"
 
       if block_given?
         # Capture the ids to invalidate in lambdas.
