@@ -1,6 +1,6 @@
-require 'rubygems'
 require 'memcache'
 require 'active_record'
+require 'after_commit'
 require 'cache_version'
 require 'deferrable'
 

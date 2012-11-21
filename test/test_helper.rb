@@ -1,19 +1,10 @@
 require 'test/unit'
 require 'rubygems'
 require 'shoulda'
-require 'mocha'
+require 'mocha/setup'
 require 'pp'
 
-$LOAD_PATH.unshift File.dirname(__FILE__) + "/../lib"
-['cache_version', 'model_set', 'memcache', 'deferrable'].each do |dir|
-  $LOAD_PATH.unshift File.dirname(__FILE__) + "/../../#{dir}/lib"
-end
-
 require 'record_cache'
-
-['lib/after_commit', 'lib/after_commit/active_record', 'lib/after_commit/connection_adapters', 'init'].each do |file|
-  require File.dirname(__FILE__) + "/../../plugins/after_commit/#{file}"
-end
 
 class Test::Unit::TestCase
 end
