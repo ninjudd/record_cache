@@ -111,6 +111,14 @@ module RecordCache
       end
     end
 
+    def id_field
+      connection.quote_column_name(primary_key)
+    end
+
+    def id_column
+      columns_hash[primary_key]
+    end
+
     def invalidate_from_conditions(conditions, flag = nil)
       if conditions.nil?
         # Just invalidate all indexes.
@@ -120,13 +128,12 @@ module RecordCache
       end
 
       # Freeze ids to avoid race conditions.
-      sql = "SELECT #{connection.quote_column_name(primary_key)} FROM #{table_name} "
+      sql = "SELECT #{id_field} FROM #{table_name} "
       self.send(:add_conditions!, sql, conditions, self.send(:scope, :find))
       ids = RecordCache.db(self).select_values(sql)
 
       return if ids.empty?
-      primary_col = columns_hash[primary_key]
-      conditions = "#{connection.quote_column_name(primary_key)} IN (#{ids.collect {|id| quote_value(id, primary_col)}.join(',')})"
+      conditions = "#{id_field} IN (#{ids.collect {|id| quote_value(id, id_column)}.join(',')})"
 
       if block_given?
         # Capture the ids to invalidate in lambdas.
