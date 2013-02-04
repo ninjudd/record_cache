@@ -63,7 +63,7 @@ module RecordCache
         if full_record?
           @fields_hash ||= model_class.column_names.sort.hash
         else
-          @fields_hash ||= fields.collect {|field| field.to_s}.hash
+          @fields_hash ||= fields.collect {|field| field.to_s}.sort.hash
         end
       end
       @fields_hash
