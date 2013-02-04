@@ -55,7 +55,7 @@ module RecordCache
     end
 
     def namespace
-      "#{model_class.name}_#{model_class.version}_#{RecordCache.version}:#{name}" << ( full_record? ? '' : ":#{fields.join(',')}" )
+      "#{model_class.name}_#{model_class.version}_#{RecordCache.version}_#{fields_hash}:#{name}"
     end
 
     def fields_hash
@@ -262,7 +262,6 @@ module RecordCache
         opts = {
           :expiry        => expiry,
           :disable_write => model_class.record_cache_config[:disable_write],
-          :validation    => lambda {|key, record_set| record_set and record_set.fields_hash == fields_hash},
         }
         cache.get_some(keys, opts) do |keys_to_fetch|
           raise 'db access is disabled' if @@disable_db
