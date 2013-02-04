@@ -1,3 +1,5 @@
+require 'digest'
+
 module RecordCache
   class Index
     include Deferrable
@@ -60,11 +62,10 @@ module RecordCache
 
     def fields_hash
       if @fields_hash.nil?
-        if full_record?
-          @fields_hash ||= model_class.column_names.sort.hash
-        else
-          @fields_hash ||= fields.collect {|field| field.to_s}.sort.hash
-        end
+        fields = full_record? ? model_class.column_names : self.fields
+        md5 = Digest::MD5::new
+        md5 << fields.sort.join(',')
+        @fields_hash = md5.hexdigest
       end
       @fields_hash
     end
