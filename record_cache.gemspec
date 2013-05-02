@@ -1,10 +1,9 @@
 lib = File.expand_path('../lib', __FILE__)
 $LOAD_PATH.unshift(lib) unless $LOAD_PATH.include?(lib)
-require 'record_cache/version'
 
 Gem::Specification.new do |gem|
   gem.name          = "test"
-  gem.version       = RecordCache::VERSION
+  gem.version       = IO.read('VERSION')
   gem.authors       = ["Justin Balthrop"]
   gem.email         = ["git@justinbalthrop.com"]
   gem.description   = %q{Active Record caching and indexing in memcache.}
