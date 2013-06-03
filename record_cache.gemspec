@@ -10,7 +10,7 @@ Gem::Specification.new do |gem|
   gem.summary       = gem.description
   gem.homepage      = "https://github.com/ninjudd/record_cache"
 
-  gem.add_development_dependency 'shoulda'
+  gem.add_development_dependency 'shoulda', '3.0.1'
   gem.add_development_dependency 'mocha'
   gem.add_development_dependency 'rsolr'
   gem.add_development_dependency 'json'
