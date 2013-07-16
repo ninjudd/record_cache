@@ -9,6 +9,7 @@ Gem::Specification.new do |gem|
   gem.description   = %q{Active Record caching and indexing in memcache.}
   gem.summary       = gem.description
   gem.homepage      = "https://github.com/ninjudd/record_cache"
+  gem.license       = 'MIT'
 
   gem.add_development_dependency 'shoulda', '3.0.1'
   gem.add_development_dependency 'mocha'
