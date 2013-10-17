@@ -199,6 +199,10 @@ module RecordCache
         @record_cache_config ||= RecordCache.config.clone
       end
     end
+
+    def record_cache_class_name
+      name
+    end
   end
 
   module ActiveRecordExtension
