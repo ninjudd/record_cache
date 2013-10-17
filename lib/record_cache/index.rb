@@ -57,7 +57,7 @@ module RecordCache
     end
 
     def namespace
-      "#{model_class.name}_#{model_class.version}_#{RecordCache.version}_#{fields_hash}:#{name}"
+      "#{model_class.record_cache_class_name}_#{model_class.version}_#{RecordCache.version}_#{fields_hash}:#{name}".tap_pp
     end
 
     def fields_hash
