@@ -200,8 +200,8 @@ module RecordCache
       end
     end
 
-    def record_cache_class_name
-      name
+    def record_cache_class
+      self
     end
   end
 
